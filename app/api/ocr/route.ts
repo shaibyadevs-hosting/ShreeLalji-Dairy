@@ -10,9 +10,13 @@ import { NextRequest, NextResponse } from "next/server";
  * - Ensure Gemini can access the image_url (public URL or multimodal upload).
  */
 
-// --- Replace inline key with process.env in production ---
-const API_KEY = "AIzaSyD8xpTjAdl5H6ECVRZkgrXAZ2Eh38Q6Scw";
+const API_KEY = process.env.GEMINI_API;
 const MODEL = "gemini-2.0-flash";
+
+if (!API_KEY) {
+  console.error("[OCR] ❌ GEMINI_API_KEY is not set in environment variables");
+}
+
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
 /**
@@ -138,7 +142,13 @@ RULES:
 
     if (!response.ok) {
       console.error("[OCR] Gemini API error:", data);
-      return NextResponse.json({ error: "Gemini API error", details: data }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "Gemini API error",
+          details: data?.error?.message || JSON.stringify(data),
+        },
+        { status: 500 }
+      );
     }
 
     const modelText = extractModelText(data);
@@ -152,7 +162,13 @@ RULES:
       if (match) {
         parsed = JSON.parse(match[0]);
       } else {
-        return NextResponse.json({ error: "Could not parse JSON", raw: modelText.substring(0, 500) }, { status: 500 });
+        return NextResponse.json(
+          {
+            error: "Could not parse JSON",
+            raw: modelText.substring(0, 500),
+          },
+          { status: 500 }
+        );
       }
     }
 

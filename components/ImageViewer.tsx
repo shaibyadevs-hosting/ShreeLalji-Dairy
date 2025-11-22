@@ -9,7 +9,11 @@ import React, { useRef, useState } from "react";
  */
 const LOCAL_TEST_PATH = "/mnt/data/PHOTO-2025-11-22-01-31-25.jpg";
 
-export default function ImageViewer() {
+export default function ImageViewer({
+  onViewDashboard,
+}: {
+  onViewDashboard: () => void;
+}) {
   const [images, setImages] = useState<string[]>([]);
   const [index, setIndex] = useState(0);
   const [scale, setScale] = useState(1);
@@ -169,6 +173,25 @@ export default function ImageViewer() {
         </button>
         <button className="danger" onClick={clearAll}>
           Clear All
+        </button>
+      </div>
+
+      <div className="tool-row">
+        <button
+          onClick={onViewDashboard}
+          style={{
+            flex: 1,
+            padding: "10px",
+            background: "#1f6feb",
+            color: "#fff",
+            border: "none",
+            borderRadius: "6px",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          📊 View Dashboard
         </button>
       </div>
 

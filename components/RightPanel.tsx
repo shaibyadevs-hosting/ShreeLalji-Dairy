@@ -60,7 +60,9 @@ export default function RightPanel() {
 
         if (!res.ok) {
           console.error("❌ OCR API error:", data);
-          alert("OCR failed: " + (data?.error ?? "unknown error"));
+          const errorMessage =
+            data?.error || data?.details || "Unknown error occurred";
+          alert("OCR failed: " + errorMessage);
           setIsLoading(false);
           return;
         }
