@@ -1,7 +1,7 @@
 // components/Dashboard.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -17,83 +17,167 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { DashboardMetrics } from "@/lib/types";
 
 type ViewMode = "chart" | "grid";
 
 const Dashboard = ({ onBack }: { onBack: () => void }) => {
   const [viewMode, setViewMode] = useState<ViewMode>("chart");
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Dummy data
-  const salesData = [
-    { month: "Jan", sales: 4000, revenue: 2400 },
-    { month: "Feb", sales: 3000, revenue: 1398 },
-    { month: "Mar", sales: 2000, revenue: 9800 },
-    { month: "Apr", sales: 2780, revenue: 3908 },
-    { month: "May", sales: 1890, revenue: 4800 },
-    { month: "Jun", sales: 2390, revenue: 3800 },
-  ];
+  useEffect(() => {
+    fetchMetrics();
+  }, []);
 
-  const topProducts = [
-    { name: "Milk (1L)", sales: 1245, revenue: 24900 },
-    { name: "Curd (500g)", sales: 987, revenue: 19740 },
-    { name: "Paneer (500g)", sales: 756, revenue: 37800 },
-    { name: "Ghee (250ml)", sales: 654, revenue: 32700 },
-    { name: "Butter (200g)", sales: 543, revenue: 16290 },
-  ];
+  async function fetchMetrics() {
+    try {
+      setIsLoading(true);
+      console.log("[Dashboard] Fetching metrics from API...");
 
-  const customerMetrics = [
-    { category: "Existing", value: 324 },
-    { category: "New This Month", value: 48 },
-    { category: "Inactive", value: 12 },
-  ];
+      const response = await fetch("/api/dashboard/metrics");
 
-  const topCustomers = [
-    { id: 1, name: "Arjun Grocery Store", purchases: 156, total: 78000 },
-    { id: 2, name: "Fresh Mart", purchases: 142, total: 71000 },
-    { id: 3, name: "Local Dairy Hub", purchases: 128, total: 64000 },
-    { id: 4, name: "Sharma Retail", purchases: 115, total: 57500 },
-    { id: 5, name: "Dairy Express", purchases: 98, total: 49000 },
-  ];
+      if (!response.ok) {
+        throw new Error("Failed to fetch dashboard metrics");
+      }
 
-  const revenueBreakdown = [
-    { name: "Milk Products", value: 45000 },
-    { name: "Dairy Products", value: 38000 },
-    { name: "Premium Range", value: 25000 },
-    { name: "Bulk Orders", value: 18000 },
-  ];
+      const data = await response.json();
+      console.log("[Dashboard] Metrics fetched:", data);
+      setMetrics(data);
+      setError(null);
+    } catch (err: any) {
+      console.error("[Dashboard] Error fetching metrics:", err);
+      setError(err.message || "Failed to load dashboard data");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // Default/fallback data
+  const salesData = metrics?.salesTrend || [];
+  const topProducts = metrics?.topProducts || [];
+  const customerMetrics = metrics?.customerMetrics || [];
+  const topCustomers = metrics?.topCustomers || [];
+  const revenueBreakdown = metrics?.revenueBreakdown || [];
 
   const COLORS = ["#1f6feb", "#0ea5e9", "#06b6d4", "#10b981"];
+
+  const formatCurrency = (value: number): string => {
+    if (value >= 100000) {
+      return `₹${(value / 100000).toFixed(1)}L`;
+    } else if (value >= 1000) {
+      return `₹${(value / 1000).toFixed(1)}K`;
+    }
+    return `₹${value}`;
+  };
 
   const kpiCards = [
     {
       title: "Total Customers",
-      value: "384",
+      value: metrics?.totalCustomers?.toString() || "0",
       change: "+12%",
       color: "bg-blue-50",
       icon: "👥",
     },
     {
       title: "Total Sales",
-      value: "₹126K",
+      value: formatCurrency(metrics?.totalSales || 0),
       change: "+8%",
       color: "bg-green-50",
       icon: "📊",
     },
     {
       title: "New Customers",
-      value: "48",
+      value: metrics?.newCustomers?.toString() || "0",
       change: "+25%",
       color: "bg-purple-50",
       icon: "✨",
     },
     {
       title: "Avg Order Value",
-      value: "₹325",
+      value: formatCurrency(metrics?.avgOrderValue || 0),
       change: "+3%",
       color: "bg-orange-50",
       icon: "💰",
     },
   ];
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#f3f4f6",
+          padding: "20px",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>📊</div>
+          <div style={{ fontSize: "20px", fontWeight: 600, color: "#1f2937" }}>
+            Loading Dashboard...
+          </div>
+          <div style={{ fontSize: "14px", color: "#6b7280", marginTop: "8px" }}>
+            Fetching data from Google Sheets
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        style={{ minHeight: "100vh", background: "#f3f4f6", padding: "20px" }}
+      >
+        <div
+          style={{
+            maxWidth: "600px",
+            margin: "0 auto",
+            marginTop: "100px",
+            background: "#fff",
+            padding: "40px",
+            borderRadius: "12px",
+            textAlign: "center",
+          }}
+        >
+          <div style={{ fontSize: "48px", marginBottom: "16px" }}>⚠️</div>
+          <div
+            style={{
+              fontSize: "20px",
+              fontWeight: 600,
+              color: "#ef4444",
+              marginBottom: "12px",
+            }}
+          >
+            Error Loading Dashboard
+          </div>
+          <div
+            style={{ fontSize: "14px", color: "#6b7280", marginBottom: "24px" }}
+          >
+            {error}
+          </div>
+          <button
+            onClick={onBack}
+            style={{
+              padding: "10px 20px",
+              borderRadius: "6px",
+              border: "1px solid #e5e7eb",
+              background: "#1f6feb",
+              color: "#fff",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            ← Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "#f3f4f6", padding: "20px" }}>
@@ -108,6 +192,23 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       >
         <h1 style={{ fontSize: "28px", fontWeight: 700 }}>Dashboard</h1>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <button
+            onClick={fetchMetrics}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "6px",
+              border: "1px solid #e5e7eb",
+              background: "#fff",
+              cursor: "pointer",
+              fontWeight: 500,
+              color: "#10b981",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            🔄 Refresh
+          </button>
           <div
             style={{
               display: "flex",
@@ -252,23 +353,23 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             >
               Sales Trend (Last 6 Months)
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width='100%' height={300}>
               <LineChart data={salesData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
+                <CartesianGrid strokeDasharray='3 3' />
+                <XAxis dataKey='month' />
                 <YAxis />
                 <Tooltip />
                 <Legend />
                 <Line
-                  type="monotone"
-                  dataKey="sales"
-                  stroke="#1f6feb"
+                  type='monotone'
+                  dataKey='sales'
+                  stroke='#1f6feb'
                   strokeWidth={2}
                 />
                 <Line
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#10b981"
+                  type='monotone'
+                  dataKey='revenue'
+                  stroke='#10b981'
                   strokeWidth={2}
                 />
               </LineChart>
@@ -294,19 +395,19 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             >
               Revenue by Category
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width='100%' height={300}>
               <PieChart>
                 <Pie
                   data={revenueBreakdown}
-                  cx="50%"
-                  cy="50%"
+                  cx='50%'
+                  cy='50%'
                   labelLine={false}
                   label={({ name, percent }) =>
                     `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
                   }
                   outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
+                  fill='#8884d8'
+                  dataKey='value'
                 >
                   {revenueBreakdown.map((_, index) => (
                     <Cell
@@ -339,20 +440,20 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             >
               Top 5 Products
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width='100%' height={300}>
               <BarChart data={topProducts}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray='3 3' />
                 <XAxis
-                  dataKey="name"
+                  dataKey='name'
                   angle={-45}
-                  textAnchor="end"
+                  textAnchor='end'
                   height={80}
                 />
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="sales" fill="#1f6feb" />
-                <Bar dataKey="revenue" fill="#10b981" />
+                <Bar dataKey='sales' fill='#1f6feb' />
+                <Bar dataKey='revenue' fill='#10b981' />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -376,19 +477,19 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             >
               Customer Distribution
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width='100%' height={300}>
               <PieChart>
                 <Pie
                   data={customerMetrics}
-                  cx="50%"
-                  cy="50%"
+                  cx='50%'
+                  cy='50%'
                   labelLine={false}
                   label={({ payload }) =>
                     `${payload?.category} (${payload?.value})`
                   }
                   outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
+                  fill='#8884d8'
+                  dataKey='value'
                 >
                   {customerMetrics.map((_, index) => (
                     <Cell

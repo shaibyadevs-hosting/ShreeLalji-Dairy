@@ -20,6 +20,7 @@ type SheetRow = {
   sale?: string;
   cash?: string;
   delPerson?: string;
+  phonenumber?: string;
 };
 
 const initialTop: TopHeader = {
@@ -92,6 +93,7 @@ export default function RightPanel() {
             sale: String(it.sale ?? ""),
             cash: String(it.cash ?? ""),
             delPerson: String(it.delPerson ?? ""),
+            phonenumber: String(it.phonenumber ?? ""),
           })
         );
 
@@ -122,6 +124,7 @@ export default function RightPanel() {
         sale: "",
         cash: "",
         delPerson: "",
+        phonenumber: "",
       },
     ]);
   }
@@ -136,6 +139,62 @@ export default function RightPanel() {
     setRows((r) => r.filter((_, i) => i !== idx));
   }
 
+  async function saveBills() {
+    if (rows.length === 0) {
+      alert("No data to save.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Process each row as a separate bill
+      for (const row of rows) {
+        if (!row.shopName || !row.cash) {
+          console.log("[SaveBills] Skipping row with missing data:", row);
+          continue;
+        }
+
+        const billData = {
+          date: top.date,
+          billNumber: row.no,
+          shopName: row.shopName,
+          phoneNumber: row.phonenumber,
+          products: `${row.samp || ""} ${row.rep || ""}`.trim() || "General",
+          sale: row.sale || "1",
+          price: row.cash,
+          totalAmount: row.cash,
+          paymentMethod: "Cash",
+          notes: row.delPerson ? `Delivery Person: ${row.delPerson}` : "",
+          imageSource: "OCR Upload",
+          shift: top.shift,
+          address: row.address,
+        };
+
+        console.log("[SaveBills] Saving bill:", billData);
+
+        const response = await fetch("/api/bills/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(billData),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error("[SaveBills] Error saving bill:", error);
+          throw new Error(error.details || "Failed to save bill");
+        }
+      }
+
+      alert(`✅ Successfully saved ${rows.length} bills to Google Sheets!`);
+      console.log("[SaveBills] All bills saved successfully");
+    } catch (error: any) {
+      console.error("[SaveBills] Error:", error);
+      alert("❌ Error saving bills: " + (error?.message || "Unknown error"));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   function exportCSV() {
     const hdr = [
       "No",
@@ -146,6 +205,7 @@ export default function RightPanel() {
       "Sale",
       "Cash",
       "Del.Person",
+      "Phone Number",
     ];
     const lines = [hdr.join(",")];
     rows.forEach((r) =>
@@ -159,6 +219,7 @@ export default function RightPanel() {
           r.sale ?? "",
           r.cash ?? "",
           r.delPerson ?? "",
+          r.phonenumber ?? "",
         ]
           .map((v) => {
             const s = String(v ?? "");
@@ -179,13 +240,14 @@ export default function RightPanel() {
   }
 
   return (
-    <main className="right-panel">
+    <main className='right-panel'>
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           padding: "12px 16px",
+          gap: "12px",
         }}
       >
         <div style={{ fontWeight: 700, fontSize: 16 }}>
@@ -194,9 +256,28 @@ export default function RightPanel() {
             <span style={{ color: "#f59e0b" }}>• Processing...</span>
           )}
         </div>
-        <button onClick={exportCSV} disabled={rows.length === 0}>
-          Export CSV
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={saveBills}
+            disabled={rows.length === 0 || isLoading}
+            style={{
+              background: "#10b981",
+              color: "#fff",
+              padding: "8px 16px",
+              borderRadius: "6px",
+              border: "none",
+              fontWeight: 600,
+              cursor:
+                rows.length === 0 || isLoading ? "not-allowed" : "pointer",
+              opacity: rows.length === 0 || isLoading ? 0.5 : 1,
+            }}
+          >
+            💾 Save to Sheets
+          </button>
+          <button onClick={exportCSV} disabled={rows.length === 0}>
+            Export CSV
+          </button>
+        </div>
       </div>
 
       <section style={{ marginTop: 10, marginBottom: 8, padding: "0 16px" }}>
@@ -275,6 +356,9 @@ export default function RightPanel() {
               <th style={{ border: "1px solid #ddd", padding: 8 }}>Cash</th>
               <th style={{ border: "1px solid #ddd", padding: 8 }}>
                 Del.Person
+              </th>
+              <th style={{ border: "1px solid #ddd", padding: 8 }}>
+                Phone Number
               </th>
               <th style={{ border: "1px solid #ddd", padding: 8 }}>Action</th>
             </tr>
