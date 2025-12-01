@@ -169,7 +169,7 @@ export default function Home() {
 
         {/* Dashboard Card */}
         <Link
-          href='/shreelalji-dairy'
+          href='/dashboard'
           style={{
             textDecoration: "none",
             background: "#ffffff",

@@ -145,48 +145,70 @@ export default function RightPanel() {
       return;
     }
 
+    // Validate top data
+    if (!top.date || !top.shift) {
+      alert("Please fill in Date and Shift fields.");
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Process each row as a separate bill
-      for (const row of rows) {
-        if (!row.shopName || !row.cash) {
-          console.log("[SaveBills] Skipping row with missing data:", row);
-          continue;
-        }
+      // Filter and map rows to items format
+      const items = rows
+        .filter((row) => {
+          // Only include rows with shopName and sale/cash
+          if (!row.shopName) {
+            console.log("[SaveBills] Skipping row with missing shopName:", row);
+            return false;
+          }
+          if (row.sale === undefined && row.cash === undefined) {
+            console.log("[SaveBills] Skipping row with missing sale/cash:", row);
+            return false;
+          }
+          return true;
+        })
+        .map((row) => ({
+          shopName: row.shopName || "",
+          phone: row.phonenumber || "",
+          sale: row.sale ? parseFloat(String(row.sale)) : 0,
+          cash: row.cash ? parseFloat(String(row.cash)) : 0,
+          address: row.address || "",
+          rep: row.rep ? parseFloat(String(row.rep)) : 0,
+          delPerson: row.delPerson || "",
+        }));
 
-        const billData = {
-          date: top.date,
-          billNumber: row.no,
-          shopName: row.shopName,
-          phoneNumber: row.phonenumber,
-          products: `${row.samp || ""} ${row.rep || ""}`.trim() || "General",
-          sale: row.sale || "1",
-          price: row.cash,
-          totalAmount: row.cash,
-          paymentMethod: "Cash",
-          notes: row.delPerson ? `Delivery Person: ${row.delPerson}` : "",
-          imageSource: "OCR Upload",
-          shift: top.shift,
-          address: row.address,
-        };
-
-        console.log("[SaveBills] Saving bill:", billData);
-
-        const response = await fetch("/api/bills/save", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(billData),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          console.error("[SaveBills] Error saving bill:", error);
-          throw new Error(error.details || "Failed to save bill");
-        }
+      if (items.length === 0) {
+        alert("No valid rows to save. Please ensure rows have Shop Name and Sale/Cash values.");
+        setIsLoading(false);
+        return;
       }
 
-      alert(`✅ Successfully saved ${rows.length} bills to Google Sheets!`);
-      console.log("[SaveBills] All bills saved successfully");
+      // Prepare data in Daily Bills format
+      const dailyBillsData = {
+        top: {
+          date: top.date,
+          shift: top.shift,
+        },
+        items: items,
+      };
+
+      console.log("[SaveBills] Saving daily bills:", dailyBillsData);
+
+      const response = await fetch("/api/bills/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dailyBillsData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("[SaveBills] Error saving bills:", error);
+        throw new Error(error.details || error.error || "Failed to save bills");
+      }
+
+      const result = await response.json();
+      alert(`✅ ${result.message || `Successfully saved ${items.length} bill(s) to Google Sheets!`}`);
+      console.log("[SaveBills] Bills saved successfully:", result);
     } catch (error: any) {
       console.error("[SaveBills] Error:", error);
       alert("❌ Error saving bills: " + (error?.message || "Unknown error"));
@@ -421,6 +443,13 @@ export default function RightPanel() {
                     onChange={(e) =>
                       updateRow(idx, "delPerson", e.target.value)
                     }
+                    style={{ width: "100%" }}
+                  />
+                </td>
+                <td style={{ border: "1px solid #ddd", padding: 4 }}>
+                  <input
+                    value={row.phonenumber ?? ""}
+                    onChange={(e) => updateRow(idx, "phonenumber", e.target.value)}
                     style={{ width: "100%" }}
                   />
                 </td>

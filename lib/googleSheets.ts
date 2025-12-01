@@ -1,11 +1,17 @@
 // lib/googleSheets.ts
-import { google } from "googleapis";
-import { BillData, CustomerData, PurchaseRecord } from "./types";
+import { google, sheets_v4 } from "googleapis";
+import {
+  BillData,
+  CustomerData,
+  PurchaseRecord,
+  DailyBillsInput,
+  DailyBillItem,
+} from "./types"; 
 
 // Initialize Google Sheets API
 const getGoogleSheetsClient = () => {
   const credentials = process.env.GOOGLE_SHEETS_CREDENTIALS;
-
+ 
   if (!credentials) {
     throw new Error(
       "GOOGLE_SHEETS_CREDENTIALS not found in environment variables"
@@ -22,9 +28,32 @@ const getGoogleSheetsClient = () => {
   return google.sheets({ version: "v4", auth });
 };
 
-const SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID;
+/**
+ * Export getSheetsClient for Daily Bills functionality
+ */
+export function getSheetsClient() {
+  return getGoogleSheetsClient();
+}
+
+const SPREADSHEET_ID = "1OwmfDCO3AGBnHlViha2FPRySaGLPDPle106T0p3W-RA";
+
+if (!SPREADSHEET_ID) {
+  throw new Error("GOOGLE_SPREADSHEET_ID not found in environment variables");
+}
+
 const DAILY_BILLS_SHEET = "Daily Bills";
-const MASTER_CUSTOMER_SHEET = "Master Customers";
+const MASTER_CUSTOMER_SHEET = "MasterCustomers";
+const MASTER_CUSTOMER_HEADERS = [
+  "Customer Name",
+  "Phone Number",
+  "Address",
+  "Total Purchase Count",
+  "Total Amount Spent",
+  "Last Purchase Date",
+  "Purchase History",
+  "Flag",
+  "Last Modified",
+];
 
 // Helper: Normalize phone number (remove spaces, dashes, etc.)
 const normalizePhoneNumber = (phone: string): string => {
@@ -84,40 +113,65 @@ export async function appendBillToSheet(billData: BillData): Promise<void> {
   console.log("[GoogleSheets] ✅ Bill appended to Daily Bills sheet");
 }
 
+const isMissingSheetError = (error: any): boolean => {
+  const message =
+    error?.errors?.[0]?.message ||
+    error?.message ||
+    (typeof error === "string" ? error : "");
+  return (
+    (typeof error?.code === "number" &&
+      (error.code === 400 || error.code === 404)) ||
+    message.includes("Unable to parse range") ||
+    message.includes("Requested entity was not found") ||
+    message.includes("Sheet not found")
+  );
+};
+
 /**
  * Get all bills from Daily Bills sheet
  */
 export async function getAllBills(): Promise<BillData[]> {
   const sheets = getGoogleSheetsClient();
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${DAILY_BILLS_SHEET}!A2:N`, // Skip header row
-  });
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${DAILY_BILLS_SHEET}!A2:N`, // Skip header row
+    });
 
-  const rows = response.data.values || [];
+    const rows = response.data.values || [];
 
-  return rows.map((row) => ({
-    date: row[0] || "",
-    billNumber: row[1] || "",
-    customerName: row[2] || "",
-    phoneNumber: row[3] || "",
-    products: row[4] || "",
-    quantity: row[5] || "",
-    price: row[6] || "",
-    totalAmount: row[7] || "",
-    paymentMethod: row[8] || "",
-    notes: row[9] || "",
-    imageSource: row[10] || "",
-    timestamp: row[11] || "",
-    shift: row[12] || "",
-    address: row[13] || "",
-  }));
+    return rows.map((row) => ({
+      date: row[0] || "",
+      billNumber: row[1] || "",
+      customerName: row[2] || "",
+      phoneNumber: row[3] || "",
+      products: row[4] || "",
+      quantity: row[5] || "",
+      price: row[6] || "",
+      totalAmount: row[7] || "",
+      paymentMethod: row[8] || "",
+      notes: row[9] || "",
+      imageSource: row[10] || "",
+      timestamp: row[11] || "",
+      shift: row[12] || "",
+      address: row[13] || "",
+    }));
+  } catch (error) {
+    if (isMissingSheetError(error)) {
+      console.warn(
+        "[GoogleSheets] Daily Bills sheet missing, returning empty result"
+      );
+      return [];
+    }
+    throw error;
+  }
 }
 
 /**
  * Find a customer by phone number in Master Customer sheet
  */
+
 export async function findCustomerByPhone(
   phoneNumber: string
 ): Promise<{ customer: CustomerData | null; rowIndex: number }> {
@@ -262,32 +316,42 @@ export async function updateCustomer(
 export async function getAllCustomers(): Promise<CustomerData[]> {
   const sheets = getGoogleSheetsClient();
 
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${MASTER_CUSTOMER_SHEET}!A2:H`, // Skip header row
-  });
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${MASTER_CUSTOMER_SHEET}!A2:H`, // Skip header row
+    });
 
-  const rows = response.data.values || [];
+    const rows = response.data.values || [];
 
-  return rows.map((row) => {
-    let purchaseHistory: PurchaseRecord[] = [];
-    try {
-      purchaseHistory = row[7] ? JSON.parse(row[7]) : [];
-    } catch (e) {
-      console.error("[GoogleSheets] Error parsing purchase history:", e);
+    return rows.map((row) => {
+      let purchaseHistory: PurchaseRecord[] = [];
+      try {
+        purchaseHistory = row[7] ? JSON.parse(row[7]) : [];
+      } catch (e) {
+        console.error("[GoogleSheets] Error parsing purchase history:", e);
+      }
+
+      return {
+        customerName: row[0] || "",
+        phoneNumber: row[1] || "",
+        email: row[2] || "",
+        address: row[3] || "",
+        totalPurchaseCount: parseInt(row[4] || "0"),
+        totalAmountSpent: parseFloat(row[5] || "0"),
+        lastPurchaseDate: row[6] || "",
+        purchaseHistory,
+      };
+    });
+  } catch (error) {
+    if (isMissingSheetError(error)) {
+      console.warn(
+        "[GoogleSheets] MasterCustomers sheet missing, returning empty result"
+      );
+      return [];
     }
-
-    return {
-      customerName: row[0] || "",
-      phoneNumber: row[1] || "",
-      email: row[2] || "",
-      address: row[3] || "",
-      totalPurchaseCount: parseInt(row[4] || "0"),
-      totalAmountSpent: parseFloat(row[5] || "0"),
-      lastPurchaseDate: row[6] || "",
-      purchaseHistory,
-    };
-  });
+    throw error;
+  }
 }
 
 /**
@@ -415,6 +479,346 @@ export async function initializeSheets(): Promise<void> {
     console.log("[GoogleSheets] ✅ Sheets initialized successfully");
   } catch (error) {
     console.error("[GoogleSheets] ❌ Error initializing sheets:", error);
+    throw error;
+  }
+}
+
+// ============================================
+// DAILY BILLS FUNCTIONALITY
+// ============================================
+
+/**
+ * Check if a sheet exists in the spreadsheet
+ */
+export async function sheetExists(sheetName: string): Promise<boolean> {
+  try {
+    const sheets = getSheetsClient();
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+
+    const sheetNames =
+      spreadsheet.data.sheets?.map((s) => s.properties?.title) || [];
+
+    return sheetNames.includes(sheetName);
+  } catch (error) {
+    console.error(`[DailyBills] Error checking if sheet exists: ${sheetName}`, error);
+    throw error;
+  }
+}
+
+/**
+ * Create a new daily sheet with headers
+ */
+export async function createDailySheet(sheetName: string): Promise<void> {
+  try {
+    const sheets = getSheetsClient();
+    // Create the sheet
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: sheetName,
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    // Add headers
+    const headers = [
+      "Date",
+      "Shop Name",
+      "Phone",
+      "Sale",
+      "Cash",
+      "Shift",
+      "Address",
+      "Rep",
+      "Delivery Person",
+    ];
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!A1:I1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [headers],
+      },
+    });
+
+    console.log(`[DailyBills] ✅ Created sheet: ${sheetName} with headers`);
+  } catch (error) {
+    console.error(`[DailyBills] ❌ Error creating sheet: ${sheetName}`, error);
+    throw error;
+  }
+}
+
+/**
+ * Append rows to a daily sheet
+ */
+export async function appendDailyRows(
+  sheetName: string,
+  date: string,
+  shift: string,
+  items: Array<{
+    shopName: string;
+    phone: string;
+    sale: number;
+    cash: number;
+    address: string;
+    rep: number;
+    delPerson: string;
+  }>
+): Promise<void> {
+  try {
+    const sheets = getSheetsClient();
+    // Convert items to rows
+    const rows = items.map((item) => [
+      date,
+      item.shopName,
+      item.phone,
+      item.sale.toString(),
+      item.cash.toString(),
+      shift,
+      item.address,
+      item.rep.toString(),
+      item.delPerson,
+    ]);
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${sheetName}!A:I`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: rows,
+      },
+    });
+
+    console.log(
+      `[DailyBills] ✅ Appended ${rows.length} row(s) to sheet: ${sheetName}`
+    );
+  } catch (error) {
+    console.error(
+      `[DailyBills] ❌ Error appending rows to sheet: ${sheetName}`,
+      error
+    );
+    throw error;
+  }
+}
+
+/**
+ * Save daily bills to the appropriate sheet
+ * Creates the sheet if it doesn't exist
+ */
+export async function saveDailyBills(data: DailyBillsInput): Promise<void> {
+  try {
+    const { top, items } = data;
+
+    // Validate input
+    if (!top.date || !top.shift) {
+      throw new Error("Missing required fields: top.date or top.shift");
+    }
+
+    if (!items || items.length === 0) {
+      throw new Error("No items provided");
+    }
+
+    // Construct sheet name: ${date}-${shift}
+    const sheetName = `${top.date}-${top.shift}`;
+
+    // Check if sheet exists
+    const exists = await sheetExists(sheetName);
+
+    if (!exists) {
+      // Create sheet with headers
+      await createDailySheet(sheetName);
+    }
+
+    // Append rows
+    await appendDailyRows(sheetName, top.date, top.shift, items);
+
+    console.log(
+      `[DailyBills] ✅ Successfully saved ${items.length} bill(s) to ${sheetName}`
+    );
+  } catch (error) {
+    console.error("[DailyBills] ❌ Error saving daily bills:", error);
+    throw error;
+  }
+}
+
+// ============================================
+// MASTER CUSTOMER FUNCTIONALITY
+// ============================================
+
+export async function ensureMasterCustomerSheet(): Promise<void> {
+  try {
+    const sheets = getSheetsClient();
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+
+    const sheetNames =
+      spreadsheet.data.sheets?.map((s) => s.properties?.title) || [];
+
+    if (!sheetNames.includes(MASTER_CUSTOMER_SHEET)) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: MASTER_CUSTOMER_SHEET,
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
+
+    // Always enforce header row (9 columns: A-I)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${MASTER_CUSTOMER_SHEET}!A1:I1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [MASTER_CUSTOMER_HEADERS],
+      },
+    });
+
+    console.log("[MasterCustomers] ✅ Sheet ready");
+  } catch (error) {
+    console.error("[MasterCustomers] ❌ Error ensuring sheet:", error);
+    throw error;
+  }
+}
+
+type PurchaseHistoryEntry = {
+  date: string;
+  amount: number;
+};
+
+export async function updateOrInsertCustomer(
+  sheetsClient: sheets_v4.Sheets,
+  spreadsheetId: string,
+  item: DailyBillItem,
+  date: string
+): Promise<void> {
+  try {
+    const phoneRaw = (item.phone ?? "").toString().trim();
+
+    if (!phoneRaw) {
+      console.warn("[MasterCustomers] Skipping entry without phone number");
+      return;
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phoneRaw);
+    // Use cash value as specified (numeric cash value from bill)
+    const totalAmount = Number(item.cash) || 0;
+    const historyEntry: PurchaseHistoryEntry = { date, amount: totalAmount };
+    
+    // Get today's date in DD-MM-YYYY format
+    const today = formatDate(new Date());
+
+    const range = `${MASTER_CUSTOMER_SHEET}!A2:I`;
+    const response = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range,
+    });
+
+    const rows = response.data.values || [];
+    let existingIndex = -1;
+
+    for (let i = 0; i < rows.length; i++) {
+      const currentPhone = normalizePhoneNumber(rows[i][1] || "");
+      if (currentPhone === normalizedPhone) {
+        existingIndex = i;
+        break;
+      }
+    }
+
+    if (existingIndex === -1) {
+      // INSERT NEW CUSTOMER
+      const newRow = [
+        item.shopName || "Unknown Customer",
+        normalizedPhone,
+        item.address || "",
+        1, // Total Purchase Count
+        totalAmount, // Total Amount Spent
+        date, // Last Purchase Date
+        JSON.stringify([historyEntry]), // Purchase History
+        1, // Flag = 1 for insert
+        today, // Last Modified
+      ];
+
+      await sheetsClient.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${MASTER_CUSTOMER_SHEET}!A:I`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [newRow],
+        },
+      });
+
+      console.log(
+        `[MasterCustomers] 🆕 Added new customer: ${item.shopName || normalizedPhone} (Flag=1)`
+      );
+      return;
+    }
+
+    // UPDATE EXISTING CUSTOMER
+    const existingRow = rows[existingIndex];
+    const existingCount = parseInt(existingRow[3] || "0", 10) || 0;
+    const existingAmount = parseFloat(existingRow[4] || "0") || 0;
+    const purchaseHistoryRaw = existingRow[6];
+    let purchaseHistory: PurchaseHistoryEntry[] = [];
+    if (purchaseHistoryRaw) {
+      try {
+        const parsed = JSON.parse(purchaseHistoryRaw);
+        if (Array.isArray(parsed)) {
+          purchaseHistory = parsed;
+        }
+      } catch (error) {
+        console.warn(
+          "[MasterCustomers] Failed to parse purchase history, resetting it."
+        );
+      }
+    }
+
+    const updatedHistory = [...purchaseHistory, historyEntry];
+    const updatedRow = [
+      existingRow[0] || item.shopName || "Unknown Customer",
+      normalizedPhone,
+      item.address || existingRow[2] || "",
+      existingCount + 1, // Increment purchase count
+      existingAmount + totalAmount, // Add to total amount
+      date, // Update last purchase date
+      JSON.stringify(updatedHistory), // Append to purchase history
+      0, // Flag = 0 for update
+      today, // Last Modified
+    ];
+
+    const rowNumber = existingIndex + 2; // account for header
+    await sheetsClient.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${MASTER_CUSTOMER_SHEET}!A${rowNumber}:I${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [updatedRow],
+      },
+    });
+
+    console.log(
+      `[MasterCustomers] ✏️ Updated customer row ${rowNumber} (${normalizedPhone}, Flag=0)`
+    );
+  } catch (error) {
+    console.error("[MasterCustomers] ❌ Error updating customer:", error);
     throw error;
   }
 }

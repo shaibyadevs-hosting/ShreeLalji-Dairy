@@ -52,3 +52,24 @@ export interface DashboardMetrics {
   revenueBreakdown: Array<{ name: string; value: number }>;
   customerMetrics: Array<{ category: string; value: number }>;
 }
+
+// Daily Bills Types
+export interface DailyBillTop {
+  date: string;
+  shift: string;
+}
+
+export interface DailyBillItem {
+  shopName: string;
+  phone: string;
+  sale: number;
+  cash: number;
+  address: string;
+  rep: number;
+  delPerson: string;
+}
+
+export interface DailyBillsInput {
+  top: DailyBillTop;
+  items: DailyBillItem[];
+}

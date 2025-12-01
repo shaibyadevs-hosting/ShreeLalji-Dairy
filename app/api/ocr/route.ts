@@ -10,7 +10,20 @@ import { NextRequest, NextResponse } from "next/server";
  * - Ensure Gemini can access the image_url (public URL or multimodal upload).
  */
 
-const API_KEY = process.env.GEMINI_API;
+require('dotenv').config();
+
+const API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_API;
+if (API_KEY) {
+  console.log(
+    `[OCR] ✅ Gemini API key loaded from ${
+      process.env.GEMINI_API_KEY ? "GEMINI_API_KEY" : "GEMINI_API"
+    }`
+  );
+} else {
+  console.warn(
+    "[OCR] ⚠️ Gemini API key missing (GEMINI_API_KEY / GEMINI_API not set)"
+  );
+}
 const MODEL = "gemini-2.0-flash";
 
 if (!API_KEY) {
@@ -34,12 +47,62 @@ function extractModelText(respObj: any): string {
 }
 
 /**
+ * Normalize date from any format to DD-MM-YYYY
+ * Accepts formats like: 17/09/2025, 17-09-25, 17-09-2025, 17/09/25, etc.
+ */
+function normalizeDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return "";
+  
+  const str = String(dateStr).trim();
+  if (!str) return "";
+
+  // Try to parse various date formats
+  // Format 1: DD/MM/YYYY or DD/MM/YY
+  let match = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  if (match) {
+    const [, day, month, year] = match;
+    const fullYear = year.length === 2 ? (parseInt(year) < 50 ? `20${year}` : `19${year}`) : year;
+    return `${day.padStart(2, "0")}-${month.padStart(2, "0")}-${fullYear}`;
+  }
+
+  // Format 2: DD-MM-YYYY or DD-MM-YY
+  match = str.match(/(\d{1,2})-(\d{1,2})-(\d{2,4})/);
+  if (match) {
+    const [, day, month, year] = match;
+    const fullYear = year.length === 2 ? (parseInt(year) < 50 ? `20${year}` : `19${year}`) : year;
+    return `${day.padStart(2, "0")}-${month.padStart(2, "0")}-${fullYear}`;
+  }
+
+  // Format 3: YYYY-MM-DD or YY-MM-DD
+  match = str.match(/(\d{2,4})-(\d{1,2})-(\d{1,2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    const fullYear = year.length === 2 ? (parseInt(year) < 50 ? `20${year}` : `19${year}`) : year;
+    return `${day.padStart(2, "0")}-${month.padStart(2, "0")}-${fullYear}`;
+  }
+
+  // Format 4: YYYY/MM/DD or YY/MM/DD
+  match = str.match(/(\d{2,4})\/(\d{1,2})\/(\d{1,2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    const fullYear = year.length === 2 ? (parseInt(year) < 50 ? `20${year}` : `19${year}`) : year;
+    return `${day.padStart(2, "0")}-${month.padStart(2, "0")}-${fullYear}`;
+  }
+
+  // If no pattern matches, return as-is (might already be in correct format)
+  return str;
+}
+
+/**
  * Ensure returned top and items have proper defaults and shape expected by client.
  */
 function sanitizeResult(parsed: any) {
   const topRaw = parsed?.top ?? {};
+  const rawDate = String(topRaw.date ?? "");
+  const normalizedDate = normalizeDate(rawDate);
+  
   const top = {
-    date: String(topRaw.date ?? ""),
+    date: normalizedDate,
     balPkt: String(topRaw.balPkt ?? topRaw["Bal PKT"] ?? ""),
     totalPkt: String(topRaw.totalPkt ?? topRaw["Total PKT"] ?? ""),
     newPkt: String(topRaw.newPkt ?? topRaw["New PKT"] ?? ""),
@@ -56,6 +119,7 @@ function sanitizeResult(parsed: any) {
     sale: String(it.sale ?? ""),
     cash: String(it.cash ?? ""),
     delPerson: String(it.delPerson ?? ""),
+    phonenumber: String(it.phonenumber ?? it.phone ?? it.phoneNumber ?? ""),
   }));
 
   return { top, items };
@@ -101,16 +165,20 @@ TASK: Return ONLY valid JSON:
       "rep":"",
       "sale":"",
       "cash":"",
-      "delPerson":""
+      "delPerson":"",
+      "phonenumber":""  
     }
   ]
 }
 
-RULES:
+IMPORTANT EXTRACTION RULES:
 1. Return ONLY JSON, no explanation
 2. Preserve sheet order
 3. Empty string "" for unknown fields
 4. No extra metadata
+5. DATE: Extract the date from the sheet. Accept ANY date format you see (e.g., 17/09/2025, 17-09-25, 17-09-2025, 17/09/25, etc.). Return the date exactly as written in the sheet - do NOT convert or normalize it. The system will handle format conversion automatically.
+6. PHONE NUMBER: Extract phone numbers from the "PHONE NO." or "Phone Number" column. Include all digits, even if partially visible. If phone number is missing or empty, use empty string "".
+7. For each row, extract ALL visible fields including phone numbers
 `;
 
     const requestBody = {
@@ -137,8 +205,8 @@ RULES:
     });
 
     const data = await response.json();
-    console.log("[OCR] Gemini response status:", response.status);
-    console.log("[OCR] Gemini response:", JSON.stringify(data, null, 2));
+  //  console.log("[OCR] Gemini response status:", response.status);
+    //console.log("[OCR] Gemini response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       console.error("[OCR] Gemini API error:", data);

@@ -37,7 +37,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       console.log("[Dashboard] Fetching metrics from API...");
 
       const response = await fetch("/api/dashboard/metrics");
-
+      console.log(response)
       if (!response.ok) {
         throw new Error("Failed to fetch dashboard metrics");
       }
@@ -688,7 +688,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                         color: "#1f6feb",
                       }}
                     >
-                      ₹{customer.total.toLocaleString()}
+                    ₹{(customer.total || 0).toLocaleString()}
                     </td>
                   </tr>
                 ))}
@@ -785,7 +785,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                         color: "#10b981",
                       }}
                     >
-                      ₹{data.revenue.toLocaleString()}
+                    ₹{(data.revenue || 0).toLocaleString()}
                     </td>
                   </tr>
                 ))}
