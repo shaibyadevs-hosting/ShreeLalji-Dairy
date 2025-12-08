@@ -45,10 +45,12 @@ export async function GET(_req: NextRequest) {
     });
 
     const sheetNames =
-      spreadsheet.data.sheets?.map((s) => s.properties?.title) || [];
+      spreadsheet.data.sheets
+        ?.map((s) => s.properties?.title || "")
+        .filter((title) => !!title) || [];
 
     // Filter daily sheets
-    const dailySheets = sheetNames.filter(
+    const dailySheets = (sheetNames as string[]).filter(
       (name) =>
         isDailySheetName(name) &&
         name !== "MasterCustomers" &&
@@ -140,4 +142,5 @@ export async function GET(_req: NextRequest) {
     );
   }
 }
+
 
