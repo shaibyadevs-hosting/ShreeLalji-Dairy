@@ -822,3 +822,374 @@ export async function updateOrInsertCustomer(
     throw error;
   }
 }
+
+// ============================================
+// CALL FOLLOW-UPS FUNCTIONALITY
+// ============================================
+
+const CALL_FOLLOWUPS_SHEET = "FollowUpCalls";
+const CALL_FOLLOWUPS_HEADERS = [
+  "Name",
+  "Phone Number",
+  "Call Date",
+  "Call Time",
+  "Notes",
+  "Status",
+  "Created At",
+];
+
+/**
+ * Ensure CallFollowUps sheet exists with proper headers
+ */
+export async function ensureCallFollowUpsSheet(): Promise<void> {
+  try {
+    const sheets = getSheetsClient();
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+
+    const sheetNames =
+      spreadsheet.data.sheets?.map((s) => s.properties?.title) || [];
+
+    if (!sheetNames.includes(CALL_FOLLOWUPS_SHEET)) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: CALL_FOLLOWUPS_SHEET,
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
+
+    // Always enforce header row
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A1:G1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [CALL_FOLLOWUPS_HEADERS],
+      },
+    });
+
+    console.log("[CallFollowUps] ✅ Sheet ready");
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error ensuring sheet:", error);
+    throw error;
+  }
+}
+
+/**
+ * Check if a call follow-up already exists (duplicate check)
+ */
+export async function callFollowUpExists(
+  phone: string,
+  callDate: string,
+  callTime: string
+): Promise<boolean> {
+  try {
+    const sheets = getSheetsClient();
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A2:G`,
+    });
+
+    const rows = response.data.values || [];
+    for (const row of rows) {
+      const rowPhone = normalizePhoneNumber((row[1] || "").toString().trim());
+      const rowDate = (row[2] || "").toString().trim();
+      const rowTime = (row[3] || "").toString().trim();
+
+      if (rowPhone === normalizedPhone && rowDate === callDate && rowTime === callTime) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error checking duplicate:", error);
+    return false; // On error, allow save (fail open)
+  }
+}
+
+/**
+ * Save a new call follow-up with duplicate check
+ */
+export async function saveCallFollowUp(data: {
+  name: string;
+  phone: string;
+  callDate: string;
+  callTime: string;
+  notes?: string;
+}): Promise<{ saved: boolean; duplicate: boolean }> {
+  try {
+    const sheets = getSheetsClient();
+    const normalizedPhone = normalizePhoneNumber(data.phone);
+    const today = formatDate(new Date());
+
+    // Check for duplicate
+    const exists = await callFollowUpExists(data.phone, data.callDate, data.callTime);
+    if (exists) {
+      console.log(`[CallFollowUps] ⚠️ Duplicate found: ${data.name} (${normalizedPhone}, ${data.callDate}, ${data.callTime})`);
+      return { saved: false, duplicate: true };
+    }
+
+    const row = [
+      data.name || "",
+      normalizedPhone,
+      data.callDate || "",
+      data.callTime || "",
+      data.notes || "",
+      "Pending",
+      today,
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A:G`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [row],
+      },
+    });
+
+    console.log(`[CallFollowUps] ✅ Saved follow-up for ${data.name}`);
+    return { saved: true, duplicate: false };
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error saving follow-up:", error);
+    throw error;
+  }
+}
+
+/**
+ * Batch save multiple call follow-ups (for OCR results)
+ */
+export async function batchSaveCallFollowUps(
+  calls: Array<{
+    name: string;
+    phone: string;
+    callDate: string;
+    callTime: string;
+    notes?: string;
+  }>
+): Promise<{ saved: number; duplicates: number; errors: number }> {
+  try {
+    const sheets = getSheetsClient();
+    const today = formatDate(new Date());
+    let saved = 0;
+    let duplicates = 0;
+    let errors = 0;
+
+    // Get all existing calls for duplicate check
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A2:G`,
+    });
+
+    const existingRows = response.data.values || [];
+    const existingKeys = new Set<string>();
+
+    for (const row of existingRows) {
+      const phone = normalizePhoneNumber((row[1] || "").toString().trim());
+      const date = (row[2] || "").toString().trim();
+      const time = (row[3] || "").toString().trim();
+      existingKeys.add(`${phone}|${date}|${time}`);
+    }
+
+    // Prepare new rows (non-duplicates only)
+    const newRows: any[] = [];
+
+    for (const call of calls) {
+      try {
+        const normalizedPhone = normalizePhoneNumber(call.phone);
+        const key = `${normalizedPhone}|${call.callDate}|${call.callTime}`;
+
+        if (existingKeys.has(key)) {
+          duplicates++;
+          console.log(`[CallFollowUps] ⚠️ Duplicate skipped: ${call.name}`);
+          continue;
+        }
+
+        existingKeys.add(key); // Add to set to prevent duplicates within batch
+        newRows.push([
+          call.name || "",
+          normalizedPhone,
+          call.callDate || "",
+          call.callTime || "",
+          call.notes || "",
+          "Pending",
+          today,
+        ]);
+        saved++;
+      } catch (err) {
+        errors++;
+        console.error(`[CallFollowUps] ❌ Error processing call ${call.name}:`, err);
+      }
+    }
+
+    // Batch append all new rows
+    if (newRows.length > 0) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${CALL_FOLLOWUPS_SHEET}!A:G`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: newRows,
+        },
+      });
+      console.log(`[CallFollowUps] ✅ Batch saved ${newRows.length} follow-ups`);
+    }
+
+    return { saved, duplicates, errors };
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error batch saving follow-ups:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get today's pending calls
+ */
+export async function getTodayCalls(): Promise<any[]> {
+  try {
+    const sheets = getSheetsClient();
+    const today = formatDate(new Date());
+    console.log(`[CallFollowUps] 🔍 Looking for today's calls. Today's date: ${today}`);
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A2:G`,
+    });
+
+    const rows = response.data.values || [];
+    console.log(`[CallFollowUps] 📋 Found ${rows.length} total rows in sheet`);
+    
+    const todayCalls = rows
+      .filter((row) => {
+        const callDate = (row[2] || "").toString().trim();
+        const status = (row[5] || "").toString().trim();
+        const name = (row[0] || "").toString().trim();
+        
+        // Case-insensitive status check
+        const isPending = status.toLowerCase() === "pending";
+        const isToday = callDate === today;
+        
+        if (!isToday) {
+          console.log(`[CallFollowUps] ⏭️ Skipping ${name}: callDate="${callDate}" !== today="${today}"`);
+        } else if (!isPending) {
+          console.log(`[CallFollowUps] ⏭️ Skipping ${name}: status="${status}" is not pending`);
+        } else {
+          console.log(`[CallFollowUps] ✅ Including ${name}: callDate="${callDate}", status="${status}"`);
+        }
+        
+        return isToday && isPending;
+      })
+      .map((row) => ({
+        name: (row[0] || "").toString().trim(),
+        phone: (row[1] || "").toString().trim(),
+        callDate: (row[2] || "").toString().trim(),
+        callTime: (row[3] || "").toString().trim(),
+        notes: (row[4] || "").toString().trim(),
+        status: (row[5] || "").toString().trim(),
+        createdAt: (row[6] || "").toString().trim(),
+      }));
+
+    console.log(`[CallFollowUps] ✅ Found ${todayCalls.length} call(s) for today`);
+    return todayCalls;
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error fetching today's calls:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get calls by date
+ */
+export async function getCallsByDate(date: string): Promise<any[]> {
+  try {
+    const sheets = getSheetsClient();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A2:G`,
+    });
+
+    const rows = response.data.values || [];
+    const calls = rows
+      .filter((row) => {
+        const callDate = (row[2] || "").toString().trim();
+        return callDate === date;
+      })
+      .map((row) => ({
+        name: (row[0] || "").toString().trim(),
+        phone: (row[1] || "").toString().trim(),
+        callDate: (row[2] || "").toString().trim(),
+        callTime: (row[3] || "").toString().trim(),
+        notes: (row[4] || "").toString().trim(),
+        status: (row[5] || "").toString().trim(),
+        createdAt: (row[6] || "").toString().trim(),
+      }));
+
+    return calls;
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error fetching calls by date:", error);
+    throw error;
+  }
+}
+
+/**
+ * Update call status to "Called"
+ */
+export async function updateCallStatus(
+  phone: string,
+  callDate: string
+): Promise<void> {
+  try {
+    const sheets = getSheetsClient();
+    const normalizedPhone = normalizePhoneNumber(phone);
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A2:G`,
+    });
+
+    const rows = response.data.values || [];
+    let rowIndex = -1;
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowPhone = normalizePhoneNumber((rows[i][1] || "").toString().trim());
+      const rowDate = (rows[i][2] || "").toString().trim();
+      if (rowPhone === normalizedPhone && rowDate === callDate) {
+        rowIndex = i + 2; // +2 because sheets are 1-indexed and we skipped header
+        break;
+      }
+    }
+
+    if (rowIndex === -1) {
+      throw new Error("Call follow-up not found");
+    }
+
+    // Update status column (column F, index 5)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!F${rowIndex}`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [["Called"]],
+      },
+    });
+
+    console.log(`[CallFollowUps] ✅ Updated status to Called for ${phone}`);
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error updating call status:", error);
+    throw error;
+  }
+}

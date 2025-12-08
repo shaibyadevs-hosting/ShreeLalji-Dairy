@@ -10,20 +10,21 @@ import { NextRequest, NextResponse } from "next/server";
  * - Ensure Gemini can access the image_url (public URL or multimodal upload).
  */
 
-require('dotenv').config();
-
+// Next.js automatically loads .env.local, no need for dotenv
 const API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_API;
+
 if (API_KEY) {
   console.log(
     `[OCR] ✅ Gemini API key loaded from ${
       process.env.GEMINI_API_KEY ? "GEMINI_API_KEY" : "GEMINI_API"
-    }`
+    } (length: ${API_KEY.length})`
   );
 } else {
-  console.warn(
-    "[OCR] ⚠️ Gemini API key missing (GEMINI_API_KEY / GEMINI_API not set)"
+  console.error(
+    "[OCR] ❌ Gemini API key missing (GEMINI_API_KEY / GEMINI_API not set)"
   );
 }
+
 const MODEL = "gemini-2.0-flash";
 
 if (!API_KEY) {
@@ -31,6 +32,7 @@ if (!API_KEY) {
 }
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
+
 
 /**
  * Helper: try to extract human text output from various Gemini response shapes
@@ -197,6 +199,18 @@ IMPORTANT EXTRACTION RULES:
       ],
     };
 
+    // Check if API key is available
+    if (!API_KEY) {
+      return NextResponse.json(
+        {
+          error: "Gemini API key not configured",
+          details: "Please set GEMINI_API_KEY or GEMINI_API in your environment variables",
+        },
+        { status: 500 }
+      );
+    }
+
+    // Call Gemini API directly
     console.log("[OCR] Sending to Gemini...");
     const response = await fetch(GEMINI_URL, {
       method: "POST",
@@ -205,17 +219,51 @@ IMPORTANT EXTRACTION RULES:
     });
 
     const data = await response.json();
-  //  console.log("[OCR] Gemini response status:", response.status);
-    //console.log("[OCR] Gemini response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
-      console.error("[OCR] Gemini API error:", data);
+      const errorCode = data?.error?.code;
+      const errorMessage = data?.error?.message || "";
+
+      // Handle invalid API key
+      if (errorCode === 400 && errorMessage.includes("API key")) {
+        console.error("[OCR] ❌ Invalid API key");
+        return NextResponse.json(
+          {
+            error: "Invalid API key",
+            details: "The Gemini API key is invalid or expired. Please check your API key.",
+            code: 400,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Handle rate limit errors
+      if (errorCode === 429) {
+        console.error("[OCR] ❌ Rate limit exceeded");
+        return NextResponse.json(
+          {
+            error: "Rate limit exceeded",
+            details: "You've exceeded your Gemini API quota. Please try again later.",
+            code: 429,
+          },
+          { status: 429 }
+        );
+      }
+
+      // Other errors
+      console.error("[OCR] Gemini API error:", {
+        code: errorCode,
+        message: errorMessage,
+        status: data?.error?.status,
+      });
+      
       return NextResponse.json(
         {
           error: "Gemini API error",
-          details: data?.error?.message || JSON.stringify(data),
+          details: errorMessage || JSON.stringify(data),
+          code: errorCode,
         },
-        { status: 500 }
+        { status: response.status || 500 }
       );
     }
 

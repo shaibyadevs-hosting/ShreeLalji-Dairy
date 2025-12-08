@@ -100,13 +100,50 @@ export default function ImageViewer({
   }
 
   function processImage() {
-    if (!images[index]) return alert("No image to process");
+    if (!images[index]) {
+      alert("No image to process");
+      return;
+    }
+    
     const imageData = images[index];
     console.log("🎬 Processing image, length:", imageData.length);
+    console.log("🎬 Image data type:", typeof imageData);
+    console.log("🎬 Image data preview:", imageData.substring(0, 50));
+    
+    // Check if it's a local file path (not base64)
+    if (imageData.startsWith("/") && !imageData.startsWith("data:")) {
+      alert("Cannot process local file path. Please upload an image file.");
+      return;
+    }
+    
+    // Ensure it's base64 data URL
+    if (!imageData.startsWith("data:image")) {
+      console.warn("⚠️ Image data doesn't start with 'data:image', might be invalid");
+    }
+    
     setIsProcessing(true);
-    window.dispatchEvent(
-      new CustomEvent("process-image", { detail: { imageData } })
-    );
+    
+    try {
+      const event = new CustomEvent("process-image", { 
+        detail: { imageData },
+        bubbles: true,
+        cancelable: true
+      });
+      
+      console.log("📤 Dispatching process-image event");
+      const dispatched = window.dispatchEvent(event);
+      console.log("📤 Event dispatched:", dispatched);
+      
+      if (!dispatched) {
+        console.warn("⚠️ Event was prevented");
+      }
+    } catch (error) {
+      console.error("❌ Error dispatching event:", error);
+      alert("Error processing image: " + (error as Error).message);
+      setIsProcessing(false);
+      return;
+    }
+    
     setTimeout(() => setIsProcessing(false), 30000);
   }
 

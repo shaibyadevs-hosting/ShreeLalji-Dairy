@@ -269,6 +269,108 @@ export default function Home() {
             </span>
           </div>
         </Link>
+
+        {/* Follow-Ups Card */}
+        <Link
+          href='/follow-ups'
+          style={{
+            textDecoration: "none",
+            background: "#ffffff",
+            borderRadius: "16px",
+            padding: "40px 32px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+            transition: "all 0.3s ease",
+            cursor: "pointer",
+            border: "2px solid transparent",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "translateY(-8px)";
+            e.currentTarget.style.boxShadow = "0 15px 40px rgba(0,0,0,0.3)";
+            e.currentTarget.style.borderColor = "#10b981";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "0 10px 30px rgba(0,0,0,0.2)";
+            e.currentTarget.style.borderColor = "transparent";
+          }}
+        >
+          <div
+            style={{
+              fontSize: "48px",
+              marginBottom: "20px",
+              textAlign: "center",
+            }}
+          >
+            📞
+          </div>
+          <h2
+            style={{
+              fontSize: "24px",
+              fontWeight: 700,
+              color: "#1f2937",
+              marginBottom: "12px",
+              textAlign: "center",
+            }}
+          >
+            Follow-Up Calls
+          </h2>
+          <p
+            style={{
+              fontSize: "15px",
+              color: "#6b7280",
+              lineHeight: "1.6",
+              textAlign: "center",
+              marginBottom: "20px",
+            }}
+          >
+            Manage call reminders, track follow-ups, and mark calls as completed
+          </p>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "8px",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              style={{
+                background: "#dcfce7",
+                color: "#166534",
+                padding: "6px 12px",
+                borderRadius: "20px",
+                fontSize: "13px",
+                fontWeight: 600,
+              }}
+            >
+              Reminders
+            </span>
+            <span
+              style={{
+                background: "#dbeafe",
+                color: "#1e40af",
+                padding: "6px 12px",
+                borderRadius: "20px",
+                fontSize: "13px",
+                fontWeight: 600,
+              }}
+            >
+              Date Filter
+            </span>
+            <span
+              style={{
+                background: "#fef3c7",
+                color: "#92400e",
+                padding: "6px 12px",
+                borderRadius: "20px",
+                fontSize: "13px",
+                fontWeight: 600,
+              }}
+            >
+              Status Tracking
+            </span>
+          </div>
+        </Link>
       </div>
 
       {/* Features Section */}

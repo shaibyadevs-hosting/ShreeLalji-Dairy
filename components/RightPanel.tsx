@@ -37,14 +37,24 @@ export default function RightPanel() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    console.log("🔧 RightPanel: Setting up process-image event listener");
+    
     async function handler(e: any) {
+      console.log("📥 RightPanel: Event received", {
+        hasDetail: !!e?.detail,
+        hasImageData: !!e?.detail?.imageData,
+        eventType: e?.type,
+      });
+      
       const imageData = e?.detail?.imageData;
       if (!imageData) {
+        console.error("❌ No image data in event detail:", e);
         alert("No image data received.");
         return;
       }
 
       console.log("📤 RightPanel received image data, size:", imageData.length);
+      console.log("📤 Image data preview:", imageData.substring(0, 50));
       setIsLoading(true);
 
       try {

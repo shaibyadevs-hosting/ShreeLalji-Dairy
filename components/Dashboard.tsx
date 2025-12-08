@@ -3,8 +3,6 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   PieChart,
@@ -21,47 +19,95 @@ import { DashboardMetrics } from "@/lib/types";
 
 type ViewMode = "chart" | "grid";
 
+type DailySales = {
+  date: string;
+  revenue: number;
+};
+
+type RepeatVsNew = {
+  repeat: number;
+  new: number;
+  total: number;
+};
+
+type AvgOrderTrend = {
+  month: string;
+  year: number;
+  avgOrderValue: number;
+};
+
+type TodayFollowUp = {
+  name: string;
+  phone: string;
+  callTime: string;
+};
+
 const Dashboard = ({ onBack }: { onBack: () => void }) => {
   const [viewMode, setViewMode] = useState<ViewMode>("chart");
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [dailySales, setDailySales] = useState<DailySales[]>([]);
+  const [repeatVsNew, setRepeatVsNew] = useState<RepeatVsNew>({ repeat: 0, new: 0, total: 0 });
+  const [avgOrderTrend, setAvgOrderTrend] = useState<AvgOrderTrend[]>([]);
+  const [todayFollowUps, setTodayFollowUps] = useState<TodayFollowUp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchMetrics();
+    fetchAllData();
   }, []);
 
-  async function fetchMetrics() {
+  async function fetchAllData() {
     try {
       setIsLoading(true);
-      console.log("[Dashboard] Fetching metrics from API...");
+      console.log("[Dashboard] Fetching all data...");
 
-      const response = await fetch("/api/dashboard/metrics");
-      console.log(response)
-      if (!response.ok) {
-        throw new Error("Failed to fetch dashboard metrics");
+      // Fetch main metrics
+      const metricsResponse = await fetch("/api/dashboard/metrics");
+      if (!metricsResponse.ok) throw new Error("Failed to fetch dashboard metrics");
+      const metricsData = await metricsResponse.json();
+      setMetrics(metricsData);
+
+      // Fetch daily sales
+      const dailySalesResponse = await fetch("/api/dashboard/daily-sales");
+      if (dailySalesResponse.ok) {
+        const dailySalesData = await dailySalesResponse.json();
+        setDailySales(dailySalesData.dailySales || []);
       }
 
-      const data = await response.json();
-      console.log("[Dashboard] Metrics fetched:", data);
-      setMetrics(data);
+      // Fetch repeat vs new
+      const repeatVsNewResponse = await fetch("/api/dashboard/repeat-vs-new");
+      if (repeatVsNewResponse.ok) {
+        const repeatVsNewData = await repeatVsNewResponse.json();
+        setRepeatVsNew(repeatVsNewData);
+      }
+
+      // Fetch avg order trend
+      const avgOrderTrendResponse = await fetch("/api/dashboard/avg-order-trend");
+      if (avgOrderTrendResponse.ok) {
+        const avgOrderTrendData = await avgOrderTrendResponse.json();
+        setAvgOrderTrend(avgOrderTrendData.trend || []);
+      }
+
+      // Fetch today's follow-ups
+      const followUpsResponse = await fetch("/api/dashboard/todays-followups");
+      if (followUpsResponse.ok) {
+        const followUpsData = await followUpsResponse.json();
+        setTodayFollowUps(followUpsData.calls || []);
+      }
+
       setError(null);
     } catch (err: any) {
-      console.error("[Dashboard] Error fetching metrics:", err);
+      console.error("[Dashboard] Error fetching data:", err);
       setError(err.message || "Failed to load dashboard data");
     } finally {
       setIsLoading(false);
     }
   }
 
-  // Default/fallback data
   const salesData = metrics?.salesTrend || [];
-  const topProducts = metrics?.topProducts || [];
-  const customerMetrics = metrics?.customerMetrics || [];
   const topCustomers = metrics?.topCustomers || [];
-  const revenueBreakdown = metrics?.revenueBreakdown || [];
 
-  const COLORS = ["#1f6feb", "#0ea5e9", "#06b6d4", "#10b981"];
+  const COLORS = ["#1f6feb", "#0ea5e9", "#06b6d4", "#10b981", "#f59e0b"];
 
   const formatCurrency = (value: number): string => {
     if (value >= 100000) {
@@ -101,6 +147,12 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       color: "bg-orange-50",
       icon: "💰",
     },
+  ];
+
+  // Prepare repeat vs new data for donut chart
+  const repeatVsNewData = [
+    { name: "Repeat Customers", value: repeatVsNew.repeat },
+    { name: "New Customers", value: repeatVsNew.new },
   ];
 
   if (isLoading) {
@@ -193,7 +245,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
         <h1 style={{ fontSize: "28px", fontWeight: 700 }}>Dashboard</h1>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <button
-            onClick={fetchMetrics}
+            onClick={fetchAllData}
             style={{
               padding: "8px 16px",
               borderRadius: "6px",
@@ -334,7 +386,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             gap: "20px",
           }}
         >
-          {/* Sales Trend */}
+          {/* Monthly Sales Trend */}
           <div
             style={{
               background: "#fff",
@@ -351,7 +403,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                 fontWeight: 700,
               }}
             >
-              Sales Trend (Last 6 Months)
+              Monthly Sales (Last 6 Months)
             </h3>
             <ResponsiveContainer width='100%' height={300}>
               <LineChart data={salesData}>
@@ -365,18 +417,20 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   dataKey='sales'
                   stroke='#1f6feb'
                   strokeWidth={2}
+                  name='Sales'
                 />
                 <Line
                   type='monotone'
                   dataKey='revenue'
                   stroke='#10b981'
                   strokeWidth={2}
+                  name='Revenue'
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Revenue Breakdown */}
+          {/* Daily Sales Trend (Last 30 Days) */}
           <div
             style={{
               background: "#fff",
@@ -393,12 +447,49 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                 fontWeight: 700,
               }}
             >
-              Revenue by Category
+              Daily Sales Trend (Last 30 Days)
+            </h3>
+            <ResponsiveContainer width='100%' height={300}>
+              <LineChart data={dailySales}>
+                <CartesianGrid strokeDasharray='3 3' />
+                <XAxis dataKey='date' angle={-45} textAnchor='end' height={80} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line
+                  type='monotone'
+                  dataKey='revenue'
+                  stroke='#10b981'
+                  strokeWidth={2}
+                  name='Revenue'
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Repeat vs New Customers */}
+          <div
+            style={{
+              background: "#fff",
+              padding: "20px",
+              borderRadius: "8px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            }}
+          >
+            <h3
+              style={{
+                marginTop: 0,
+                marginBottom: "16px",
+                fontSize: "16px",
+                fontWeight: 700,
+              }}
+            >
+              Repeat vs New Customers
             </h3>
             <ResponsiveContainer width='100%' height={300}>
               <PieChart>
                 <Pie
-                  data={revenueBreakdown}
+                  data={repeatVsNewData}
                   cx='50%'
                   cy='50%'
                   labelLine={false}
@@ -406,13 +497,14 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
                   }
                   outerRadius={80}
+                  innerRadius={40}
                   fill='#8884d8'
                   dataKey='value'
                 >
-                  {revenueBreakdown.map((_, index) => (
+                  {repeatVsNewData.map((_, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
+                      fill={index === 0 ? "#1f6feb" : "#10b981"}
                     />
                   ))}
                 </Pie>
@@ -421,7 +513,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             </ResponsiveContainer>
           </div>
 
-          {/* Top Products */}
+          {/* Monthly Avg Order Value Trend */}
           <div
             style={{
               background: "#fff",
@@ -438,27 +530,27 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                 fontWeight: 700,
               }}
             >
-              Top 5 Products
+              Monthly Avg Order Value Trend
             </h3>
             <ResponsiveContainer width='100%' height={300}>
-              <BarChart data={topProducts}>
+              <LineChart data={avgOrderTrend}>
                 <CartesianGrid strokeDasharray='3 3' />
-                <XAxis
-                  dataKey='name'
-                  angle={-45}
-                  textAnchor='end'
-                  height={80}
-                />
+                <XAxis dataKey='month' />
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey='sales' fill='#1f6feb' />
-                <Bar dataKey='revenue' fill='#10b981' />
-              </BarChart>
+                <Line
+                  type='monotone'
+                  dataKey='avgOrderValue'
+                  stroke='#f59e0b'
+                  strokeWidth={2}
+                  name='Avg Order Value'
+                />
+              </LineChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Customer Distribution */}
+          {/* Top Customers */}
           <div
             style={{
               background: "#fff",
@@ -475,32 +567,184 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                 fontWeight: 700,
               }}
             >
-              Customer Distribution
+              Top Customers
             </h3>
-            <ResponsiveContainer width='100%' height={300}>
-              <PieChart>
-                <Pie
-                  data={customerMetrics}
-                  cx='50%'
-                  cy='50%'
-                  labelLine={false}
-                  label={({ payload }) =>
-                    `${payload?.category} (${payload?.value})`
-                  }
-                  outerRadius={80}
-                  fill='#8884d8'
-                  dataKey='value'
-                >
-                  {customerMetrics.map((_, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
+            <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr
+                    style={{
+                      borderBottom: "2px solid #e5e7eb",
+                      background: "#f9fafb",
+                      position: "sticky",
+                      top: 0,
+                    }}
+                  >
+                    <th
+                      style={{
+                        padding: "12px",
+                        textAlign: "left",
+                        fontWeight: 600,
+                        fontSize: "12px",
+                      }}
+                    >
+                      Customer
+                    </th>
+                    <th
+                      style={{
+                        padding: "12px",
+                        textAlign: "right",
+                        fontWeight: 600,
+                        fontSize: "12px",
+                      }}
+                    >
+                      Purchases
+                    </th>
+                    <th
+                      style={{
+                        padding: "12px",
+                        textAlign: "right",
+                        fontWeight: 600,
+                        fontSize: "12px",
+                      }}
+                    >
+                      Total
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topCustomers.slice(0, 10).map((customer, idx) => (
+                    <tr key={idx} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                      <td style={{ padding: "12px", fontSize: "13px" }}>
+                        {customer.name}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px",
+                          textAlign: "right",
+                          fontSize: "13px",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {customer.purchases}
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px",
+                          textAlign: "right",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                          color: "#1f6feb",
+                        }}
+                      >
+                        ₹{(customer.total || 0).toLocaleString()}
+                      </td>
+                    </tr>
                   ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Follow-Up Calls Due Today */}
+          <div
+            style={{
+              background: "#fff",
+              padding: "20px",
+              borderRadius: "8px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            }}
+          >
+            <h3
+              style={{
+                marginTop: 0,
+                marginBottom: "16px",
+                fontSize: "16px",
+                fontWeight: 700,
+              }}
+            >
+              📞 Follow-Up Calls Due Today ({todayFollowUps.length})
+            </h3>
+            {todayFollowUps.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "40px",
+                  color: "#6b7280",
+                  fontSize: "14px",
+                }}
+              >
+                No calls scheduled for today
+              </div>
+            ) : (
+              <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr
+                      style={{
+                        borderBottom: "2px solid #e5e7eb",
+                        background: "#f9fafb",
+                        position: "sticky",
+                        top: 0,
+                      }}
+                    >
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          fontWeight: 600,
+                          fontSize: "12px",
+                        }}
+                      >
+                        Name
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          fontWeight: 600,
+                          fontSize: "12px",
+                        }}
+                      >
+                        Phone
+                      </th>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "right",
+                          fontWeight: 600,
+                          fontSize: "12px",
+                        }}
+                      >
+                        Time
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todayFollowUps.map((call, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                        <td style={{ padding: "12px", fontSize: "13px" }}>
+                          {call.name}
+                        </td>
+                        <td style={{ padding: "12px", fontSize: "13px" }}>
+                          {call.phone}
+                        </td>
+                        <td
+                          style={{
+                            padding: "12px",
+                            textAlign: "right",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {call.callTime}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -512,98 +756,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             gap: "20px",
           }}
         >
-          {/* Top Products Grid */}
-          <div
-            style={{
-              background: "#fff",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-            }}
-          >
-            <h3
-              style={{
-                marginTop: 0,
-                marginBottom: "16px",
-                fontSize: "16px",
-                fontWeight: 700,
-              }}
-            >
-              Top Products
-            </h3>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: "2px solid #e5e7eb",
-                    background: "#f9fafb",
-                  }}
-                >
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                    }}
-                  >
-                    Product
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "right",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                    }}
-                  >
-                    Sales
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "right",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                    }}
-                  >
-                    Revenue
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {topProducts.map((product, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                    <td style={{ padding: "12px", fontSize: "13px" }}>
-                      {product.name}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "right",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {product.sales}
-                    </td>
-                    <td
-                      style={{
-                        padding: "12px",
-                        textAlign: "right",
-                        fontSize: "13px",
-                        fontWeight: 600,
-                        color: "#10b981",
-                      }}
-                    >
-                      ₹{product.revenue.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
           {/* Top Customers Grid */}
           <div
             style={{
@@ -688,7 +840,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                         color: "#1f6feb",
                       }}
                     >
-                    ₹{(customer.total || 0).toLocaleString()}
+                      ₹{(customer.total || 0).toLocaleString()}
                     </td>
                   </tr>
                 ))}
@@ -696,7 +848,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             </table>
           </div>
 
-          {/* Sales Data Grid */}
+          {/* Monthly Sales Grid */}
           <div
             style={{
               background: "#fff",
@@ -785,7 +937,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                         color: "#10b981",
                       }}
                     >
-                    ₹{(data.revenue || 0).toLocaleString()}
+                      ₹{(data.revenue || 0).toLocaleString()}
                     </td>
                   </tr>
                 ))}
@@ -793,7 +945,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             </table>
           </div>
 
-          {/* Revenue Breakdown Grid */}
+          {/* Follow-Up Calls Due Today Grid */}
           <div
             style={{
               background: "#fff",
@@ -810,85 +962,84 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                 fontWeight: 700,
               }}
             >
-              Revenue by Category
+              📞 Follow-Up Calls Due Today ({todayFollowUps.length})
             </h3>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: "2px solid #e5e7eb",
-                    background: "#f9fafb",
-                  }}
-                >
-                  <th
+            {todayFollowUps.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "40px",
+                  color: "#6b7280",
+                  fontSize: "14px",
+                }}
+              >
+                No calls scheduled for today
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr
                     style={{
-                      padding: "12px",
-                      textAlign: "left",
-                      fontWeight: 600,
-                      fontSize: "12px",
+                      borderBottom: "2px solid #e5e7eb",
+                      background: "#f9fafb",
                     }}
                   >
-                    Category
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "right",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                    }}
-                  >
-                    Amount
-                  </th>
-                  <th
-                    style={{
-                      padding: "12px",
-                      textAlign: "right",
-                      fontWeight: 600,
-                      fontSize: "12px",
-                    }}
-                  >
-                    % of Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {revenueBreakdown.map((item, idx) => {
-                  const total = revenueBreakdown.reduce(
-                    (sum, x) => sum + x.value,
-                    0
-                  );
-                  const percentage = ((item.value / total) * 100).toFixed(1);
-                  return (
+                    <th
+                      style={{
+                        padding: "12px",
+                        textAlign: "left",
+                        fontWeight: 600,
+                        fontSize: "12px",
+                      }}
+                    >
+                      Name
+                    </th>
+                    <th
+                      style={{
+                        padding: "12px",
+                        textAlign: "left",
+                        fontWeight: 600,
+                        fontSize: "12px",
+                      }}
+                    >
+                      Phone
+                    </th>
+                    <th
+                      style={{
+                        padding: "12px",
+                        textAlign: "right",
+                        fontWeight: 600,
+                        fontSize: "12px",
+                      }}
+                    >
+                      Time
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {todayFollowUps.map((call, idx) => (
                     <tr key={idx} style={{ borderBottom: "1px solid #e5e7eb" }}>
                       <td style={{ padding: "12px", fontSize: "13px" }}>
-                        {item.name}
+                        {call.name}
+                      </td>
+                      <td style={{ padding: "12px", fontSize: "13px" }}>
+                        {call.phone}
                       </td>
                       <td
                         style={{
                           padding: "12px",
                           textAlign: "right",
                           fontSize: "13px",
-                          fontWeight: 600,
+                          fontWeight: 500,
                         }}
                       >
-                        ₹{item.value.toLocaleString()}
-                      </td>
-                      <td
-                        style={{
-                          padding: "12px",
-                          textAlign: "right",
-                          fontSize: "13px",
-                          color: "#1f6feb",
-                        }}
-                      >
-                        {percentage}%
+                        {call.callTime}
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
