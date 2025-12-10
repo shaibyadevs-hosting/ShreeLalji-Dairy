@@ -18,6 +18,7 @@ import {
   Cloud,
   Sparkles
 } from "lucide-react";
+import { href } from "react-router-dom";
 
 export default function Home() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -89,13 +90,17 @@ export default function Home() {
             </div>
             <div className="flex items-center space-x-6">
               <div className="hidden md:flex items-center space-x-8">
-                <a href="#" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition">Features</a>
+                <a href="#features" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition">Features</a>
                 <a href="#" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition">Pricing</a>
-                <a href="#" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition">Documentation</a>
+                <a href="#docs" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition">Documentation</a>
               </div>
-              <button className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all">
-                Get Started
-              </button>
+              
+<Link 
+  href="/shreelalji-dairy"
+  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all inline-block"
+>
+  Get Started
+</Link>
             </div>
           </nav>
         </div>
@@ -154,7 +159,7 @@ export default function Home() {
         </div>
 
         {/* Features Grid */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-20" id="features">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Everything You Need in One Platform</h2>
             <p className="text-gray-600 max-w-2xl mx-auto">
@@ -198,7 +203,7 @@ export default function Home() {
         </div>
 
         {/* How It Works Section */}
-        <div className="bg-gradient-to-b from-white to-gray-50 py-20">
+        <div className="bg-gradient-to-b from-white to-gray-50 py-20" id="docs">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center mb-16">
               <h2 className="text-3xl font-bold text-gray-900 mb-4">How It Works</h2>
