@@ -1146,6 +1146,36 @@ export async function getCallsByDate(date: string): Promise<any[]> {
 }
 
 /**
+ * Get all calls (for stats calculation)
+ */
+export async function getAllCalls(): Promise<any[]> {
+  try {
+    const sheets = getSheetsClient();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A2:G`,
+    });
+
+    const rows = response.data.values || [];
+    const calls = rows.map((row) => ({
+      name: (row[0] || "").toString().trim(),
+      phone: (row[1] || "").toString().trim(),
+      callDate: (row[2] || "").toString().trim(),
+      callTime: (row[3] || "").toString().trim(),
+      notes: (row[4] || "").toString().trim(),
+      status: (row[5] || "").toString().trim(),
+      createdAt: (row[6] || "").toString().trim(),
+    }));
+
+    return calls;
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error fetching all calls:", error);
+    throw error;
+  }
+}
+
+/**
  * Update call status to "Called"
  */
 export async function updateCallStatus(
