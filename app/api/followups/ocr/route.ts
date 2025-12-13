@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_API;
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-2.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
 /**
