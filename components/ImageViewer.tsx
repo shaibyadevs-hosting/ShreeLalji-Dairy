@@ -195,7 +195,15 @@ export default function ImageViewer({
       </div>
 
       <div className="tool-row">
-        <input type="file" accept="image/*" onChange={onFileChange} />
+             <label className="upload-btn">
+  📁 Upload Image
+  <input
+    type="file"
+    accept="image/*"
+    onChange={onFileChange}
+    hidden
+  />
+</label>
         <button onClick={() => zoom(0.2)}>Zoom +</button>
         <button onClick={() => zoom(-0.2)}>Zoom -</button>
         <button onClick={rotateLeft}>Rotate ⟲</button>
