@@ -25,7 +25,7 @@ if (API_KEY) {
   );
 }
 
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-2.5-flash";
 
 if (!API_KEY) {
   console.error("[OCR] ❌ GEMINI_API_KEY is not set in environment variables");
