@@ -222,15 +222,15 @@ const loadCustomers = async (
 const computeSalesTrend = (
   customers: CustomerRow[]
 ): SalesTrendPoint[] => {
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
 
   // Initialize month buckets for last 6 months
   const monthBuckets: Record<string, number> = {};
 
-  for (let i = 5; i >= 0; i--) {
-    const monthDate = new Date(currentYear, currentMonth - i, 1);
+    for (let i = 5; i >= 0; i--) {
+      const monthDate = new Date(currentYear, currentMonth - i, 1);
     const key = `${monthDate.getFullYear()}-${monthDate.getMonth()}`;
     monthBuckets[key] = 0;
   }
@@ -241,24 +241,24 @@ const computeSalesTrend = (
       const monthYearKey = getMonthYearKey(entry.date);
       if (monthYearKey && monthBuckets.hasOwnProperty(monthYearKey)) {
         monthBuckets[monthYearKey] += entry.amount;
-      }
+        }
     }
   }
 
   // Build trend array for last 6 months
   // Dashboard expects: { month, sales, revenue }
   const trend: any[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const monthDate = new Date(currentYear, currentMonth - i, 1);
+    for (let i = 5; i >= 0; i--) {
+      const monthDate = new Date(currentYear, currentMonth - i, 1);
     const key = `${monthDate.getFullYear()}-${monthDate.getMonth()}`;
     const sales = monthBuckets[key] || 0;
 
     trend.push({
-      month: getMonthName(monthDate),
+        month: getMonthName(monthDate),
       sales: Math.round(sales),
       revenue: Math.round(sales), // Use same value for revenue
-    });
-  }
+      });
+    }
 
   return trend;
 };

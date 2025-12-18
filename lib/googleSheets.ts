@@ -627,9 +627,17 @@ export async function saveDailyBills(data: DailyBillsInput): Promise<void> {
     if (!items || items.length === 0) {
       throw new Error("No items provided");
     }
+    function toDDMMYYYY(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-");
+  if (!y || !m || !d) return isoDate;
+  return `${d}-${m}-${y}`;
+}
+
 
     // Construct sheet name: ${date}-${shift}
-    const sheetName = `${top.date}-${top.shift}`;
+    const displayDate = toDDMMYYYY(top.date);
+const sheetName = `${displayDate}-${top.shift}`;
+
 
     // Check if sheet exists
     const exists = await sheetExists(sheetName);
@@ -1116,6 +1124,7 @@ export async function getTodayCalls(): Promise<any[]> {
 export async function getCallsByDate(date: string): Promise<any[]> {
   try {
     const sheets = getSheetsClient();
+    console.log(`[CallFollowUps] 🔍 Looking for calls by date. Filter date: ${date}`);
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
@@ -1123,10 +1132,29 @@ export async function getCallsByDate(date: string): Promise<any[]> {
     });
 
     const rows = response.data.values || [];
+    console.log(`[CallFollowUps] 📋 Found ${rows.length} total rows in sheet`);
+    
+    // Log all call dates found for debugging
+    const allCallDates = rows.map(row => (row[2] || "").toString().trim()).filter(Boolean);
+    const uniqueDates = [...new Set(allCallDates)];
+    console.log(`[CallFollowUps] 📆 Unique call dates found in sheet: ${uniqueDates.join(", ")}`);
+    
     const calls = rows
       .filter((row) => {
         const callDate = (row[2] || "").toString().trim();
-        return callDate === date;
+        const status = (row[5] || "").toString().trim();
+        const name = (row[0] || "").toString().trim();
+        
+        // Check if call date matches the filter date
+        const matchesDate = callDate === date;
+        
+        if (!matchesDate) {
+          console.log(`[CallFollowUps] ⏭️ Skipping ${name}: callDate="${callDate}" !== filterDate="${date}"`);
+        } else {
+          console.log(`[CallFollowUps] ✅ Including ${name}: callDate="${callDate}", status="${status}"`);
+        }
+        
+        return matchesDate;
       })
       .map((row) => ({
         name: (row[0] || "").toString().trim(),
@@ -1138,6 +1166,7 @@ export async function getCallsByDate(date: string): Promise<any[]> {
         createdAt: (row[6] || "").toString().trim(),
       }));
 
+    console.log(`[CallFollowUps] ✅ Found ${calls.length} call(s) for date ${date}`);
     return calls;
   } catch (error) {
     console.error("[CallFollowUps] ❌ Error fetching calls by date:", error);

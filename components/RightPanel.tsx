@@ -31,6 +31,30 @@ const initialTop: TopHeader = {
   shift: "",
 };
 
+function normalizeDate(input?: string): string {
+  if (!input) return "";
+
+  // Already correct format
+  if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    return input;
+  }
+
+  // dd-mm-yyyy or dd/mm/yyyy
+  const match = input.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (match) {
+    const [, dd, mm, yyyy] = match;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+
+  // Fallback: try JS Date parsing
+  const d = new Date(input);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split("T")[0];
+  }
+
+  return "";
+}
+
 export default function RightPanel() {
   const [top, setTop] = useState<TopHeader>(initialTop);
   const [rows, setRows] = useState<SheetRow[]>([]);
@@ -39,14 +63,14 @@ export default function RightPanel() {
 
   useEffect(() => {
     console.log("🔧 RightPanel: Setting up process-image event listener");
-    
+
     async function handler(e: any) {
       console.log("📥 RightPanel: Event received", {
         hasDetail: !!e?.detail,
         hasImageData: !!e?.detail?.imageData,
         eventType: e?.type,
       });
-      
+
       const imageData = e?.detail?.imageData;
       if (!imageData) {
         console.error("❌ No image data in event detail:", e);
@@ -87,7 +111,7 @@ export default function RightPanel() {
         console.log("✅ Extracted items count:", returnedItems.length);
 
         setTop({
-          date: String(returnedTop.date ?? ""),
+           date: normalizeDate(returnedTop.date),
           balPkt: String(returnedTop.balPkt ?? ""),
           totalPkt: String(returnedTop.totalPkt ?? ""),
           newPkt: String(returnedTop.newPkt ?? ""),
@@ -173,7 +197,10 @@ export default function RightPanel() {
             return false;
           }
           if (row.sale === undefined && row.cash === undefined) {
-            console.log("[SaveBills] Skipping row with missing sale/cash:", row);
+            console.log(
+              "[SaveBills] Skipping row with missing sale/cash:",
+              row
+            );
             return false;
           }
           return true;
@@ -189,7 +216,9 @@ export default function RightPanel() {
         }));
 
       if (items.length === 0) {
-        alert("No valid rows to save. Please ensure rows have Shop Name and Sale/Cash values.");
+        alert(
+          "No valid rows to save. Please ensure rows have Shop Name and Sale/Cash values."
+        );
         setIsLoading(false);
         return;
       }
@@ -218,7 +247,12 @@ export default function RightPanel() {
       }
 
       const result = await response.json();
-      alert(`✅ ${result.message || `Successfully saved ${items.length} bill(s) to Google Sheets!`}`);
+      alert(
+        `✅ ${
+          result.message ||
+          `Successfully saved ${items.length} bill(s) to Google Sheets!`
+        }`
+      );
       console.log("[SaveBills] Bills saved successfully:", result);
     } catch (error: any) {
       console.error("[SaveBills] Error:", error);
@@ -267,14 +301,22 @@ export default function RightPanel() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `bills_${top.date || new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `bills_${
+      top.date || new Date().toISOString().split("T")[0]
+    }.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
   // Calculate totals
-  const totalSale = rows.reduce((sum, row) => sum + (parseFloat(row.sale || "0") || 0), 0);
-  const totalCash = rows.reduce((sum, row) => sum + (parseFloat(row.cash || "0") || 0), 0);
+  const totalSale = rows.reduce(
+    (sum, row) => sum + (parseFloat(row.sale || "0") || 0),
+    0
+  );
+  const totalCash = rows.reduce(
+    (sum, row) => sum + (parseFloat(row.cash || "0") || 0),
+    0
+  );
 
   return (
     <div className="flex-1 flex flex-col h-full bg-gradient-to-b from-gray-50 to-white">
@@ -286,9 +328,11 @@ export default function RightPanel() {
               <span className="text-white text-lg">📄</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Extracted Bills Data</h1>
+              <h1 className="text-xl font-bold text-gray-900">
+                Extracted Bills Data
+              </h1>
               <p className="text-sm text-gray-500">
-                {rows.length} {rows.length === 1 ? 'bill' : 'bills'} extracted
+                {rows.length} {rows.length === 1 ? "bill" : "bills"} extracted
                 {isLoading && (
                   <span className="ml-2 inline-flex items-center">
                     <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse mr-1"></span>
@@ -298,7 +342,7 @@ export default function RightPanel() {
               </p>
             </div>
           </div>
-          
+
           <div className="flex flex-wrap gap-2">
             <button
               onClick={saveBills}
@@ -329,15 +373,17 @@ export default function RightPanel() {
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-500">📅 Date</label>
             <input
+              type="date"
               value={top.date}
               onChange={(e) => setTop({ ...top, date: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              placeholder="YYYY-MM-DD"
             />
           </div>
-          
+
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-500">📦 Bal PKT</label>
+            <label className="text-xs font-medium text-gray-500">
+              📦 Bal PKT
+            </label>
             <input
               value={top.balPkt}
               onChange={(e) => setTop({ ...top, balPkt: e.target.value })}
@@ -345,9 +391,11 @@ export default function RightPanel() {
               placeholder="0"
             />
           </div>
-          
+
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-500">📊 Total PKT</label>
+            <label className="text-xs font-medium text-gray-500">
+              📊 Total PKT
+            </label>
             <input
               value={top.totalPkt}
               onChange={(e) => setTop({ ...top, totalPkt: e.target.value })}
@@ -355,9 +403,11 @@ export default function RightPanel() {
               placeholder="0"
             />
           </div>
-          
+
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-500">🆕 New PKT</label>
+            <label className="text-xs font-medium text-gray-500">
+              🆕 New PKT
+            </label>
             <input
               value={top.newPkt}
               onChange={(e) => setTop({ ...top, newPkt: e.target.value })}
@@ -365,18 +415,17 @@ export default function RightPanel() {
               placeholder="0"
             />
           </div>
-          
+
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-500">⏰ Shift</label>
+            <label className="text-xs font-medium text-gray-500">
+              ⏰ Shift
+            </label>
             <select
               value={top.shift}
               onChange={(e) => setTop({ ...top, shift: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white"
             >
-              <option value="">Select Shift</option>
               <option value="Morning">Morning</option>
-              <option value="Evening">Evening</option>
-              <option value="Night">Night</option>
             </select>
           </div>
         </div>
@@ -402,9 +451,12 @@ export default function RightPanel() {
               <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
                 <span className="text-2xl">📄</span>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No bills extracted yet</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No bills extracted yet
+              </h3>
               <p className="text-gray-500 max-w-md">
-                Upload an image using the left panel to extract bill data. The extracted data will appear here.
+                Upload an image using the left panel to extract bill data. The
+                extracted data will appear here.
               </p>
             </div>
           ) : (
@@ -434,114 +486,125 @@ export default function RightPanel() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {rows.map((row, idx) => (
-                    <tr 
+                    <tr
                       key={idx}
-                      className={`hover:bg-gray-50 transition ${expandedRow === idx ? 'bg-blue-50' : ''}`}
+                      className={`hover:bg-gray-50 transition ${
+                        expandedRow === idx ? "bg-blue-50" : ""
+                      }`}
                     >
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{row.no}</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {row.no}
+                        </div>
                       </td>
-                      
+
                       <td className="py-4 px-4">
                         <div className="space-y-2">
                           <input
                             value={row.shopName ?? ""}
-                            onChange={(e) => updateRow(idx, "shopName", e.target.value)}
+                            onChange={(e) =>
+                              updateRow(idx, "shopName", e.target.value)
+                            }
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm font-medium"
                             placeholder="Shop Name"
                           />
                           <textarea
                             value={row.address ?? ""}
-                            onChange={(e) => updateRow(idx, "address", e.target.value)}
+                            onChange={(e) =>
+                              updateRow(idx, "address", e.target.value)
+                            }
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm resize-none"
                             placeholder="Address"
                             rows={2}
                           />
                         </div>
                       </td>
-                      
+
                       <td className="py-4 px-4">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <div className="text-xs text-gray-500 mb-1">Samp</div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Samp
+                            </div>
                             <input
                               value={row.samp ?? ""}
-                              onChange={(e) => updateRow(idx, "samp", e.target.value)}
+                              onChange={(e) =>
+                                updateRow(idx, "samp", e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                               placeholder="0"
                             />
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500 mb-1">Rep</div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Rep
+                            </div>
                             <input
                               value={row.rep ?? ""}
-                              onChange={(e) => updateRow(idx, "rep", e.target.value)}
+                              onChange={(e) =>
+                                updateRow(idx, "rep", e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                               placeholder="0"
                             />
                           </div>
                         </div>
                       </td>
-                      
+
                       <td className="py-4 px-4">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <div className="text-xs text-gray-500 mb-1">Sale (₹)</div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Sale (₹)
+                            </div>
                             <input
                               value={row.sale ?? ""}
-                              onChange={(e) => updateRow(idx, "sale", e.target.value)}
+                              onChange={(e) =>
+                                updateRow(idx, "sale", e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                               placeholder="0.00"
                             />
                           </div>
                           <div>
-                            <div className="text-xs text-gray-500 mb-1">Cash (₹)</div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              Cash (₹)
+                            </div>
                             <input
                               value={row.cash ?? ""}
-                              onChange={(e) => updateRow(idx, "cash", e.target.value)}
+                              onChange={(e) =>
+                                updateRow(idx, "cash", e.target.value)
+                              }
                               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                               placeholder="0.00"
                             />
                           </div>
                         </div>
                       </td>
-                      
+
                       <td className="py-4 px-4">
                         <div className="space-y-2">
                           <input
                             value={row.delPerson ?? ""}
-                            onChange={(e) => updateRow(idx, "delPerson", e.target.value)}
+                            onChange={(e) =>
+                              updateRow(idx, "delPerson", e.target.value)
+                            }
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                             placeholder="Delivery Person"
                           />
                           <input
                             value={row.phonenumber ?? ""}
-                            onChange={(e) => updateRow(idx, "phonenumber", e.target.value)}
+                            onChange={(e) =>
+                              updateRow(idx, "phonenumber", e.target.value)
+                            }
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                             placeholder="Phone Number"
                           />
                         </div>
                       </td>
-                      
+
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              if (expandedRow === idx) {
-                                setExpandedRow(null);
-                              } else {
-                                setExpandedRow(idx);
-                              }
-                            }}
-                            className={`p-2 rounded-lg transition ${
-                              expandedRow === idx 
-                                ? 'bg-blue-100 text-blue-600' 
-                                : 'text-gray-400 hover:bg-gray-100'
-                            }`}
-                            title="View details"
-                          >
-                            👁️
-                          </button>
                           <button
                             onClick={() => deleteRow(idx)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
@@ -564,7 +627,11 @@ export default function RightPanel() {
           <div className="border-t border-gray-200 bg-white px-6 py-4">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
               <div className="text-sm text-gray-600">
-                📊 Total: <span className="font-semibold text-gray-900">{rows.length}</span> bills
+                📊 Total:{" "}
+                <span className="font-semibold text-gray-900">
+                  {rows.length}
+                </span>{" "}
+                bills
               </div>
               <div className="flex items-center gap-6">
                 <div className="text-sm">
@@ -614,19 +681,27 @@ export default function RightPanel() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <div className="text-xs text-gray-500 mb-1">Shop Name</div>
-              <div className="font-medium">{rows[expandedRow].shopName || "—"}</div>
+              <div className="font-medium">
+                {rows[expandedRow].shopName || "—"}
+              </div>
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1">Address</div>
-              <div className="font-medium">{rows[expandedRow].address || "—"}</div>
+              <div className="font-medium">
+                {rows[expandedRow].address || "—"}
+              </div>
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1">Phone</div>
-              <div className="font-medium">{rows[expandedRow].phonenumber || "—"}</div>
+              <div className="font-medium">
+                {rows[expandedRow].phonenumber || "—"}
+              </div>
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1">Delivery Person</div>
-              <div className="font-medium">{rows[expandedRow].delPerson || "—"}</div>
+              <div className="font-medium">
+                {rows[expandedRow].delPerson || "—"}
+              </div>
             </div>
           </div>
         </div>

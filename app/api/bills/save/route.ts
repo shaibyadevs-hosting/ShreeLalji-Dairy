@@ -11,6 +11,11 @@ import { DailyBillsInput } from "@/lib/types";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+function toDDMMYYYY(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-");
+  if (!y || !m || !d) return isoDate;
+  return `${d}-${m}-${y}`;
+}
 
     // Validate required fields
     if (!body.top) {
@@ -106,11 +111,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Successfully saved ${dailyBillsData.items.length} bill(s) to sheet: ${dailyBillsData.top.date}-${dailyBillsData.top.shift}`,
-      sheetName: `${dailyBillsData.top.date}-${dailyBillsData.top.shift}`,
-    });
+    const displayDate = toDDMMYYYY(dailyBillsData.top.date);
+const sheetName = `${displayDate}-${dailyBillsData.top.shift}`;
+
+return NextResponse.json({
+  success: true,
+  message: `Successfully saved ${dailyBillsData.items.length} bill(s) to sheet: ${sheetName}`,
+  sheetName,
+});
+
   } catch (error: any) {
     console.error("[SaveDailyBills] Error:", error);
     return NextResponse.json(

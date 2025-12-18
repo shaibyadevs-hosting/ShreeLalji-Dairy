@@ -159,13 +159,7 @@ export default function ImageViewer({
       <div className="viewer-header">
         <div className="title">Image Viewer</div>
         <div className="controls">
-          <button onClick={addLocalTestImage}>Add Local Test</button>
-          <button onClick={prev} disabled={index <= 0}>
-            Prev
-          </button>
-          <button onClick={next} disabled={index >= images.length - 1}>
-            Next
-          </button>
+        
         </div>
       </div>
 
@@ -195,7 +189,16 @@ export default function ImageViewer({
       </div>
 
       <div className="tool-row">
-        <input type="file" accept="image/*" onChange={onFileChange} />
+       <label className="upload-btn">
+  📁 Upload Image
+  <input
+    type="file"
+    accept="image/*"
+    onChange={onFileChange}
+    hidden
+  />
+</label>
+<br></br>
         <button onClick={() => zoom(0.2)}>Zoom +</button>
         <button onClick={() => zoom(-0.2)}>Zoom -</button>
         <button onClick={rotateLeft}>Rotate ⟲</button>

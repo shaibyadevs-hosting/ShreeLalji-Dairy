@@ -839,7 +839,15 @@ export default function FollowUpsPage() {
                       type="date"
                       value={selectedDate}
                       onChange={handleDateChange}
-                      className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                      readOnly
+                      onKeyDown={(e) => {
+                        // Prevent manual typing but allow calendar to open
+                        if (e.key !== "Tab" && e.key !== "Enter") {
+                          e.preventDefault();
+                        }
+                      }}
+                      onPaste={(e) => e.preventDefault()}
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition cursor-pointer"
                     />
                     {selectedDate && (
                       <button

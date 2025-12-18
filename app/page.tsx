@@ -64,6 +64,7 @@ export default function Home() {
     { label: "Customer Satisfaction", value: "98%", icon: <Users className="w-5 h-5" /> },
     { label: "Uptime", value: "99.9%", icon: <Shield className="w-5 h-5" /> }
   ];
+const [showContact, setShowContact] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
@@ -311,44 +312,122 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="mb-6 md:mb-0">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">🥛</span>
-                </div>
-                <div>
-                  <div className="font-bold text-gray-900">ShreeLalJI Dairy</div>
-                  <div className="text-sm text-gray-500">Automated Sales Platform</div>
-                </div>
-              </div>
-              <p className="text-gray-600 text-sm">
-                Transform your dairy business with AI-powered insights
-              </p>
-            </div>
-            <div className="text-center md:text-right">
-              <p className="text-gray-500 text-sm mb-2">
-                Built with ❤️ by EI Team
-              </p>
-              <p className="text-gray-400 text-xs">
-                © {new Date().getFullYear()} ShreeLalJI Dairy Platform. All rights reserved.
-              </p>
-            </div>
+     <footer className="border-t border-gray-200 bg-white">
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="flex flex-col md:flex-row justify-between items-center">
+      
+      {/* Left Section */}
+      <div className="mb-6 md:mb-0">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+            <span className="text-white font-bold text-lg">🥛</span>
+          </div>
+          <div>
+            <div className="font-bold text-gray-900">ShreeLalJI Dairy</div>
+            <div className="text-sm text-gray-500">Automated Sales Platform</div>
           </div>
         </div>
-      </footer>
+
+        <p className="text-gray-600 text-sm mb-2">
+          Transform your dairy business with AI-powered insights
+        </p>
+
+        {/* Contact Us */}
+        <p className="text-sm text-gray-600">
+          📞 <span className="font-medium">Contact Us:</span> +91 9131394858
+        </p>
+      </div>
+
+      {/* Right Section */}
+      <div className="text-center md:text-right">
+        <p className="text-gray-500 text-sm mb-1">
+          Made by{" "}
+          <a
+            href="https://www.ensis.ltd/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-blue-600 hover:underline"
+          >
+            Ensis Innovations
+          </a>
+        </p>
+
+        <p className="text-gray-400 text-xs">
+          © {new Date().getFullYear()} ShreeLalJI Dairy Platform. All rights reserved.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</footer>
+
 
       {/* Floating CTA */}
-      <div className="fixed bottom-8 right-8 z-50">
-        <Link
-          href="/shreelalji-dairy"
-          className="flex items-center space-x-3 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold shadow-xl hover:shadow-2xl hover:shadow-blue-500/30 transition-all group animate-bounce"
+    <div className="fixed bottom-8 right-8 z-50">
+  <button
+    onClick={() => setShowContact(true)}
+    className="flex items-center space-x-3 px-6 py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold shadow-xl hover:shadow-2xl hover:shadow-green-500/30 transition-all group animate-bounce"
+  >
+    <span>📞 Contact Us</span>
+    <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
+  </button>
+  {showContact && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="bg-white rounded-xl shadow-xl w-[90%] max-w-md p-6 relative">
+      
+      {/* Close Button */}
+      <button
+        onClick={() => setShowContact(false)}
+        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+      >
+        ✕
+      </button>
+
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        📞 Contact Ensis Innovations
+      </h3>
+
+      <div className="space-y-3 text-sm text-gray-700">
+        <p>
+          <span className="font-medium">📧 Email:</span>{" "}
+          <a
+            href="mailto:contact@ensis.ltd"
+            className="text-blue-600 hover:underline"
+          >
+            ensisinnovations@gmail.com
+          </a>
+        </p>
+
+        <p>
+          <span className="font-medium">🌐 Website:</span>{" "}
+          <a
+            href="https://www.ensis.ltd/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+          >
+            https://www.ensis.ltd/
+          </a>
+        </p>
+
+        <p>
+          <span className="font-medium">📱 Phone:</span>{" "}
+          <span className="text-gray-800">+91-9131394858</span>
+        </p>
+      </div>
+
+      <div className="mt-6 text-right">
+        <button
+          onClick={() => setShowContact(false)}
+          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
         >
-          <span>Start Free Trial</span>
-          <ArrowRight className="w-5 h-5 group-hover:translate-x-2 transition-transform" />
-        </Link>
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
       </div>
     </div>
   );

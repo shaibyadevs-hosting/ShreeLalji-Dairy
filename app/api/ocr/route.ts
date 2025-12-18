@@ -181,6 +181,7 @@ IMPORTANT EXTRACTION RULES:
 5. DATE: Extract the date from the sheet. Accept ANY date format you see (e.g., 17/09/2025, 17-09-25, 17-09-2025, 17/09/25, etc.). Return the date exactly as written in the sheet - do NOT convert or normalize it. The system will handle format conversion automatically.
 6. PHONE NUMBER: Extract phone numbers from the "PHONE NO." or "Phone Number" column. Include all digits, even if partially visible. If phone number is missing or empty, use empty string "".
 7. For each row, extract ALL visible fields including phone numbers
+8. Identify DelPerson as Nitin & Pushpa only.
 `;
 
     const requestBody = {

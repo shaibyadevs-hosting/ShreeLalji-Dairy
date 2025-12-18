@@ -206,7 +206,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
               <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
                 <span className="text-white text-2xl">!</span>
               </div>
-            </div>
+          </div>
             <h2 className="text-2xl font-bold text-gray-800 mb-3">Error Loading Dashboard</h2>
             <p className="text-gray-600 mb-6">{error}</p>
             <div className="flex gap-4 justify-center">
@@ -217,13 +217,13 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                 <RefreshCw className="w-4 h-4" />
                 Retry
               </button>
-              <button
-                onClick={onBack}
+          <button
+            onClick={onBack}
                 className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center gap-2"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Go Back
-              </button>
+          </button>
             </div>
           </div>
         </div>
@@ -240,7 +240,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             <button
               onClick={onBack}
               className="p-2 rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow border border-gray-200"
-            >
+      >
               <ChevronLeft className="w-5 h-5 text-gray-600" />
             </button>
             <div>
@@ -279,7 +279,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             >
               <Grid3x3 className="w-4 h-4" />
               Grid View
-            </button>
+          </button>
           </div>
         </div>
       </div>
@@ -300,20 +300,20 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   {card.icon}
                 </div>
                 <span className="px-3 py-1 bg-green-50 text-green-600 rounded-full text-sm font-medium">
-                  {card.change}
-                </span>
-              </div>
+                {card.change}
+              </span>
+            </div>
               <h3 className="text-gray-500 text-sm font-medium mb-1">{card.title}</h3>
               <p className="text-2xl font-bold text-gray-800 mb-1">{card.value}</p>
               <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden mt-4">
-                <div
+            <div
                   className="h-full rounded-full"
-                  style={{
+              style={{
                     width: `${Math.min(100, 30 + idx * 20)}%`,
                     background: card.gradient,
-                  }}
+              }}
                 />
-              </div>
+            </div>
             </div>
           </div>
         ))}
@@ -330,7 +330,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             </div>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={salesData}>
+              <LineChart data={salesData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis 
                     dataKey="month" 
@@ -351,26 +351,26 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                     }}
                   />
-                  <Legend />
-                  <Line
+                <Legend />
+                <Line
                     type="monotone"
                     dataKey="sales"
                     stroke="#3b82f6"
                     strokeWidth={3}
                     dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
                     activeDot={{ r: 6 }}
-                  />
-                  <Line
+                />
+                <Line
                     type="monotone"
                     dataKey="revenue"
                     stroke="#10b981"
                     strokeWidth={3}
                     dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
                     activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
           </div>
 
           {/* Daily Sales Trend */}
@@ -383,12 +383,12 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={dailySales}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                  <XAxis 
+                <XAxis
                     dataKey="date" 
                     axisLine={false}
                     tickLine={false}
                     tick={{ fill: '#6b7280', fontSize: 12 }}
-                  />
+                />
                   <YAxis 
                     axisLine={false}
                     tickLine={false}
@@ -413,8 +413,8 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                       <stop offset="95%" stopColor="#10b981" stopOpacity={0.2}/>
                     </linearGradient>
                   </defs>
-                </BarChart>
-              </ResponsiveContainer>
+              </BarChart>
+            </ResponsiveContainer>
             </div>
           </div>
 
@@ -426,29 +426,29 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             </div>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
+              <PieChart>
+                <Pie
                     data={repeatVsNewData}
                     cx="50%"
                     cy="50%"
-                    labelLine={false}
+                  labelLine={false}
                     label={({ name, percent }) => 
                       `${name}: ${((percent || 0) * 100).toFixed(0)}%`
-                    }
-                    outerRadius={80}
+                  }
+                  outerRadius={80}
                     innerRadius={50}
                     fill="#8884d8"
                     dataKey="value"
-                  >
+                >
                     {repeatVsNewData.map((_, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
+                    <Cell
+                      key={`cell-${index}`}
                         fill={index === 0 ? "#3b82f6" : "#8b5cf6"}
                         stroke="#fff"
                         strokeWidth={2}
-                      />
-                    ))}
-                  </Pie>
+                    />
+                  ))}
+                </Pie>
                   <Tooltip 
                     formatter={(value) => [`${value} customers`, 'Count']}
                     contentStyle={{
@@ -458,8 +458,8 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                     }}
                   />
-                </PieChart>
-              </ResponsiveContainer>
+              </PieChart>
+            </ResponsiveContainer>
             </div>
             <div className="flex justify-center gap-8 mt-4">
               <div className="flex items-center gap-2">
@@ -527,14 +527,14 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead>
+              <thead>
                   <tr className="border-b border-gray-200">
                     <th className="pb-3 text-left text-sm font-semibold text-gray-600">Customer</th>
                     <th className="pb-3 text-right text-sm font-semibold text-gray-600">Purchases</th>
                     <th className="pb-3 text-right text-sm font-semibold text-gray-600">Total Value</th>
-                  </tr>
-                </thead>
-                <tbody>
+                </tr>
+              </thead>
+              <tbody>
                   {topCustomers.slice(0, 8).map((customer, idx) => (
                     <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                       <td className="py-4">
@@ -544,20 +544,20 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                           </div>
                           <span className="font-medium text-gray-800">{customer.name}</span>
                         </div>
-                      </td>
+                    </td>
                       <td className="py-4 text-right">
                         <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
                           {customer.purchases} orders
                         </span>
-                      </td>
+                    </td>
                       <td className="py-4 text-right font-semibold text-gray-800">
                         ₹{(customer.total || 0).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           </div>
 
           {/* Monthly Sales Grid */}
@@ -568,36 +568,36 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead>
+              <thead>
                   <tr className="border-b border-gray-200">
                     <th className="pb-3 text-left text-sm font-semibold text-gray-600">Month</th>
                     <th className="pb-3 text-right text-sm font-semibold text-gray-600">Sales Count</th>
                     <th className="pb-3 text-right text-sm font-semibold text-gray-600">Revenue</th>
                     <th className="pb-3 text-right text-sm font-semibold text-gray-600">Growth</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {salesData.map((data, idx) => (
+                </tr>
+              </thead>
+              <tbody>
+                {salesData.map((data, idx) => (
                     <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                       <td className="py-4 font-medium text-gray-800">{data.month}</td>
                       <td className="py-4 text-right">
                         <span className="font-medium">{data.sales}</span>
-                      </td>
+                    </td>
                       <td className="py-4 text-right font-semibold text-green-600">
                         ₹{(data.revenue || 0).toLocaleString()}
-                      </td>
+                    </td>
                       <td className="py-4 text-right">
                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                           idx > 0 ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-600'
                         }`}>
                           {idx > 0 ? '+12%' : '-'}
                         </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           </div>
         </div>
       )}
@@ -659,11 +659,11 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm">
                     Reschedule
                   </button>
-                </div>
+          </div>
               </div>
             ))}
-          </div>
-        )}
+        </div>
+      )}
       </div>
 
       {/* Footer Stats */}
