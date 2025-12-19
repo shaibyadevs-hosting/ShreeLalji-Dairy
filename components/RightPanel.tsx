@@ -15,12 +15,17 @@ type SheetRow = {
   no?: string;
   shopName?: string;
   address?: string;
-  samp?: string;
-  rep?: string;
-  sale?: string;
-  cash?: string;
+  samp?: string; // Sample Qty
+  rep?: string; // Return Qty
+  sale?: string; // Sale Qty
+  cash?: string; // Legacy field
   delPerson?: string;
   phonenumber?: string;
+  packetPrice?: string; // Packet Price per row
+  // Calculated amounts (read-only)
+  saleAmount?: number;
+  sampleAmount?: number;
+  returnAmount?: number;
 };
 
 const initialTop: TopHeader = {
@@ -28,7 +33,7 @@ const initialTop: TopHeader = {
   balPkt: "",
   totalPkt: "",
   newPkt: "",
-  shift: "",
+  shift: "Morning", // Default shift
 };
 
 function normalizeDate(input?: string): string {
@@ -115,11 +120,17 @@ export default function RightPanel() {
           balPkt: String(returnedTop.balPkt ?? ""),
           totalPkt: String(returnedTop.totalPkt ?? ""),
           newPkt: String(returnedTop.newPkt ?? ""),
-          shift: String(returnedTop.shift ?? ""),
+          shift: String(returnedTop.shift ?? top.shift ?? "Morning"),
         });
 
         const normalizedRows: SheetRow[] = returnedItems.map(
-          (it: any, idx: number) => ({
+          (it: any, idx: number) => {
+            const packetPrice = parseFloat(String(it.packetPrice ?? "0")) || 0;
+            const saleQty = parseFloat(String(it.sale ?? "0")) || 0;
+            const sampleQty = parseFloat(String(it.samp ?? "0")) || 0;
+            const returnQty = parseFloat(String(it.rep ?? "0")) || 0;
+            
+            return {
             no: String(it.no ?? idx + 1),
             shopName: String(it.shopName ?? ""),
             address: String(it.address ?? ""),
@@ -129,7 +140,12 @@ export default function RightPanel() {
             cash: String(it.cash ?? ""),
             delPerson: String(it.delPerson ?? ""),
             phonenumber: String(it.phonenumber ?? ""),
-          })
+            packetPrice: String(it.packetPrice ?? ""),
+              saleAmount: saleQty * packetPrice,
+              sampleAmount: sampleQty * packetPrice,
+              returnAmount: returnQty * packetPrice,
+            };
+          }
         );
 
         setRows(normalizedRows);
@@ -160,15 +176,39 @@ export default function RightPanel() {
         cash: "",
         delPerson: "",
         phonenumber: "",
+        packetPrice: "",
+        saleAmount: 0,
+        sampleAmount: 0,
+        returnAmount: 0,
       },
     ]);
   }
 
   function updateRow(idx: number, key: keyof SheetRow, value: string) {
-    setRows((r) =>
-      r.map((row, i) => (i === idx ? { ...row, [key]: value } : row))
-    );
+    setRows((r) => {
+      const updated = r.map((row, i) => {
+        if (i === idx) {
+          const newRow = { ...row, [key]: value };
+          // Use row-specific packetPrice
+          const packetPrice = parseFloat(newRow.packetPrice || "0") || 0;
+          // Auto-calculate amounts when quantities or packetPrice change
+          const saleQty = parseFloat(newRow.sale || "0") || 0;
+          const sampleQty = parseFloat(newRow.samp || "0") || 0;
+          const returnQty = parseFloat(newRow.rep || "0") || 0;
+          
+          return {
+            ...newRow,
+            saleAmount: saleQty * packetPrice,
+            sampleAmount: sampleQty * packetPrice,
+            returnAmount: returnQty * packetPrice,
+          };
+        }
+        return row;
+      });
+      return updated;
+    });
   }
+
 
   function deleteRow(idx: number) {
     setRows((r) => r.filter((_, i) => i !== idx));
@@ -181,8 +221,12 @@ export default function RightPanel() {
     }
 
     // Validate top data
-    if (!top.date || !top.shift) {
-      alert("Please fill in Date and Shift fields.");
+    const dateValue = top.date?.trim();
+    // Default to "Morning" if shift is empty
+    const shiftValue = (top.shift?.trim() || "Morning");
+    
+    if (!dateValue) {
+      alert("Please fill in the Date field.");
       return;
     }
 
@@ -191,29 +235,45 @@ export default function RightPanel() {
       // Filter and map rows to items format
       const items = rows
         .filter((row) => {
-          // Only include rows with shopName and sale/cash
+          // Only include rows with shopName
           if (!row.shopName) {
             console.log("[SaveBills] Skipping row with missing shopName:", row);
             return false;
-          }
-          if (row.sale === undefined && row.cash === undefined) {
+        }
+          // At least one quantity should be > 0 (sale, sample, or return)
+          const saleQty = parseFloat(String(row.sale || "0")) || 0;
+          const sampleQty = parseFloat(String(row.samp || "0")) || 0;
+          const returnQty = parseFloat(String(row.rep || "0")) || 0;
+          if (saleQty === 0 && sampleQty === 0 && returnQty === 0) {
             console.log(
-              "[SaveBills] Skipping row with missing sale/cash:",
+              "[SaveBills] Skipping row with all quantities zero:",
               row
             );
             return false;
           }
           return true;
         })
-        .map((row) => ({
-          shopName: row.shopName || "",
-          phone: row.phonenumber || "",
-          sale: row.sale ? parseFloat(String(row.sale)) : 0,
-          cash: row.cash ? parseFloat(String(row.cash)) : 0,
-          address: row.address || "",
-          rep: row.rep ? parseFloat(String(row.rep)) : 0,
-          delPerson: row.delPerson || "",
-        }));
+        .map((row) => {
+          const packetPrice = parseFloat(String(row.packetPrice || "0")) || 0;
+          const saleQty = parseFloat(String(row.sale || "0")) || 0;
+          const sampleQty = parseFloat(String(row.samp || "0")) || 0;
+          const returnQty = parseFloat(String(row.rep || "0")) || 0;
+          
+          return {
+            shopName: row.shopName || "",
+            phone: row.phonenumber || "",
+            packetPrice: packetPrice,
+            saleQty: saleQty,
+            sampleQty: sampleQty,
+            returnQty: returnQty,
+            saleAmount: saleQty * packetPrice,
+            sampleAmount: sampleQty * packetPrice,
+            returnAmount: returnQty * packetPrice,
+            address: row.address || "",
+            rep: row.rep ? parseFloat(String(row.rep)) : 0, // Keep for backward compatibility
+            delPerson: row.delPerson || "",
+          };
+        });
 
       if (items.length === 0) {
         alert(
@@ -226,25 +286,25 @@ export default function RightPanel() {
       // Prepare data in Daily Bills format
       const dailyBillsData = {
         top: {
-          date: top.date,
-          shift: top.shift,
+          date: dateValue,
+          shift: shiftValue,
         },
         items: items,
-      };
+        };
 
       console.log("[SaveBills] Saving daily bills:", dailyBillsData);
 
-      const response = await fetch("/api/bills/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        const response = await fetch("/api/bills/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dailyBillsData),
-      });
+        });
 
-      if (!response.ok) {
-        const error = await response.json();
+        if (!response.ok) {
+          const error = await response.json();
         console.error("[SaveBills] Error saving bills:", error);
         throw new Error(error.details || error.error || "Failed to save bills");
-      }
+        }
 
       const result = await response.json();
       alert(
@@ -309,12 +369,20 @@ export default function RightPanel() {
   }
 
   // Calculate totals
-  const totalSale = rows.reduce(
-    (sum, row) => sum + (parseFloat(row.sale || "0") || 0),
+  const totalSaleAmount = rows.reduce(
+    (sum, row) => sum + (row.saleAmount || 0),
     0
   );
-  const totalCash = rows.reduce(
-    (sum, row) => sum + (parseFloat(row.cash || "0") || 0),
+  const totalSampleAmount = rows.reduce(
+    (sum, row) => sum + (row.sampleAmount || 0),
+    0
+  );
+  const totalReturnAmount = rows.reduce(
+    (sum, row) => sum + (row.returnAmount || 0),
+    0
+  );
+  const totalSaleQty = rows.reduce(
+    (sum, row) => sum + (parseFloat(row.sale || "0") || 0),
     0
   );
 
@@ -333,20 +401,20 @@ export default function RightPanel() {
               </h1>
               <p className="text-sm text-gray-500">
                 {rows.length} {rows.length === 1 ? "bill" : "bills"} extracted
-                {isLoading && (
+          {isLoading && (
                   <span className="ml-2 inline-flex items-center">
                     <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse mr-1"></span>
                     Processing...
                   </span>
-                )}
+          )}
               </p>
             </div>
-          </div>
+        </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={saveBills}
-              disabled={rows.length === 0 || isLoading}
+          <button
+            onClick={saveBills}
+            disabled={rows.length === 0 || isLoading}
               className="px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
             >
               {isLoading ? (
@@ -355,14 +423,14 @@ export default function RightPanel() {
                 "💾"
               )}
               Save to Sheets
-            </button>
+          </button>
             <button
               onClick={exportCSV}
               disabled={rows.length === 0}
               className="px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
             >
               📥 Export CSV
-            </button>
+          </button>
           </div>
         </div>
       </div>
@@ -421,15 +489,15 @@ export default function RightPanel() {
               ⏰ Shift
             </label>
             <select
-              value={top.shift}
+              value={top.shift || "Morning"}
               onChange={(e) => setTop({ ...top, shift: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white"
             >
               <option value="Morning">Morning</option>
             </select>
           </div>
+          </div>
         </div>
-      </div>
 
       {/* Bills Table */}
       <div className="flex-1 overflow-hidden flex flex-col">
@@ -475,17 +543,17 @@ export default function RightPanel() {
                     </th>
                     <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Financials
-                    </th>
+              </th>
                     <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Delivery & Contact
-                    </th>
+              </th>
                     <th className="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Actions
-                    </th>
-                  </tr>
-                </thead>
+              </th>
+            </tr>
+          </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {rows.map((row, idx) => (
+            {rows.map((row, idx) => (
                     <tr
                       key={idx}
                       className={`hover:bg-gray-50 transition ${
@@ -496,12 +564,12 @@ export default function RightPanel() {
                         <div className="text-sm font-medium text-gray-900">
                           {row.no}
                         </div>
-                      </td>
+                </td>
 
                       <td className="py-4 px-4">
                         <div className="space-y-2">
-                          <input
-                            value={row.shopName ?? ""}
+                  <input
+                    value={row.shopName ?? ""}
                             onChange={(e) =>
                               updateRow(idx, "shopName", e.target.value)
                             }
@@ -516,79 +584,122 @@ export default function RightPanel() {
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm resize-none"
                             placeholder="Address"
                             rows={2}
-                          />
+                  />
                         </div>
-                      </td>
+                </td>
 
                       <td className="py-4 px-4">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">
+                                Sale Qty
+                              </div>
+                  <input
+                                type="number"
+                                value={row.sale ?? ""}
+                                onChange={(e) =>
+                                  updateRow(idx, "sale", e.target.value)
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                                placeholder="0"
+                                min="0"
+                              />
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">
+                                Sample Qty
+                              </div>
+                  <input
+                                type="number"
+                    value={row.samp ?? ""}
+                                onChange={(e) =>
+                                  updateRow(idx, "samp", e.target.value)
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                                placeholder="0"
+                                min="0"
+                  />
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">
+                                Return Qty
+                              </div>
+                  <input
+                                type="number"
+                    value={row.rep ?? ""}
+                                onChange={(e) =>
+                                  updateRow(idx, "rep", e.target.value)
+                                }
+                                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                                placeholder="0"
+                                min="0"
+                              />
+                            </div>
+                          </div>
                           <div>
                             <div className="text-xs text-gray-500 mb-1">
-                              Samp
+                              Packet Price (₹)
                             </div>
                             <input
-                              value={row.samp ?? ""}
+                              type="number"
+                              value={row.packetPrice ?? ""}
                               onChange={(e) =>
-                                updateRow(idx, "samp", e.target.value)
+                                updateRow(idx, "packetPrice", e.target.value)
                               }
                               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                               placeholder="0"
-                            />
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1">
-                              Rep
-                            </div>
-                            <input
-                              value={row.rep ?? ""}
-                              onChange={(e) =>
-                                updateRow(idx, "rep", e.target.value)
-                              }
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
-                              placeholder="0"
+                              min="0"
+                              step="0.01"
                             />
                           </div>
                         </div>
-                      </td>
+                </td>
 
                       <td className="py-4 px-4">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1">
-                              Sale (₹)
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">
+                                Sale Amount (₹)
+                              </div>
+                              <input
+                                value={row.saleAmount?.toFixed(2) ?? "0.00"}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-100 text-gray-700 cursor-not-allowed outline-none text-sm font-medium"
+                              />
                             </div>
-                            <input
-                              value={row.sale ?? ""}
-                              onChange={(e) =>
-                                updateRow(idx, "sale", e.target.value)
-                              }
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
-                              placeholder="0.00"
-                            />
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-500 mb-1">
-                              Cash (₹)
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">
+                                Sample Amount (₹)
+                              </div>
+                  <input
+                                value={row.sampleAmount?.toFixed(2) ?? "0.00"}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-100 text-gray-700 cursor-not-allowed outline-none text-sm font-medium"
+                  />
                             </div>
-                            <input
-                              value={row.cash ?? ""}
-                              onChange={(e) =>
-                                updateRow(idx, "cash", e.target.value)
-                              }
-                              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
-                              placeholder="0.00"
-                            />
+                            <div>
+                              <div className="text-xs text-gray-500 mb-1">
+                                Return Amount (₹)
+                              </div>
+                  <input
+                                value={row.returnAmount?.toFixed(2) ?? "0.00"}
+                                readOnly
+                                className="w-full px-3 py-2 border border-gray-300 rounded bg-gray-100 text-gray-700 cursor-not-allowed outline-none text-sm font-medium"
+                              />
+                            </div>
                           </div>
                         </div>
-                      </td>
+                </td>
 
                       <td className="py-4 px-4">
                         <div className="space-y-2">
-                          <input
-                            value={row.delPerson ?? ""}
-                            onChange={(e) =>
-                              updateRow(idx, "delPerson", e.target.value)
-                            }
+                  <input
+                    value={row.delPerson ?? ""}
+                    onChange={(e) =>
+                      updateRow(idx, "delPerson", e.target.value)
+                    }
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                             placeholder="Delivery Person"
                           />
@@ -599,25 +710,25 @@ export default function RightPanel() {
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                             placeholder="Phone Number"
-                          />
+                  />
                         </div>
-                      </td>
+                </td>
 
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => deleteRow(idx)}
+                  <button
+                    onClick={() => deleteRow(idx)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                             title="Delete row"
-                          >
+                  >
                             🗑️
-                          </button>
+                  </button>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
             </div>
           )}
         </div>
@@ -633,17 +744,35 @@ export default function RightPanel() {
                 </span>{" "}
                 bills
               </div>
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4 flex-wrap">
                 <div className="text-sm">
-                  <span className="text-gray-600">💰 Total Sale:</span>
-                  <span className="font-semibold text-green-600 ml-2">
-                    ₹{totalSale.toFixed(2)}
+                  <span className="text-gray-600">📦 Total Sale Qty:</span>
+                  <span className="font-semibold text-blue-600 ml-2">
+                    {totalSaleQty}
                   </span>
                 </div>
                 <div className="text-sm">
-                  <span className="text-gray-600">💵 Total Cash:</span>
+                  <span className="text-gray-600">💰 Sale Amount:</span>
                   <span className="font-semibold text-green-600 ml-2">
-                    ₹{totalCash.toFixed(2)}
+                    ₹{totalSaleAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-600">🎁 Sample Amount:</span>
+                  <span className="font-semibold text-orange-600 ml-2">
+                    ₹{totalSampleAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-600">↩️ Return Amount:</span>
+                  <span className="font-semibold text-red-600 ml-2">
+                    ₹{totalReturnAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-600">📊 Net Revenue:</span>
+                  <span className="font-semibold text-purple-600 ml-2">
+                    ₹{(totalSaleAmount - totalSampleAmount - totalReturnAmount).toFixed(2)}
                   </span>
                 </div>
                 <button
@@ -676,7 +805,7 @@ export default function RightPanel() {
               className="text-gray-500 hover:text-gray-700"
             >
               ✕
-            </button>
+        </button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>

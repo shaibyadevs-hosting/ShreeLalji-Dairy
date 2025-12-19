@@ -57,16 +57,25 @@ export interface DashboardMetrics {
 export interface DailyBillTop {
   date: string;
   shift: string;
+  packetPrice?: number;
 }
 
 export interface DailyBillItem {
   shopName: string;
   phone: string;
-  sale: number;
-  cash: number;
+  packetPrice: number;
+  saleQty: number;
+  sampleQty: number;
+  returnQty: number;
+  saleAmount: number;
+  sampleAmount: number;
+  returnAmount: number;
   address: string;
   rep: number;
   delPerson: string;
+  // Legacy fields for backward compatibility
+  sale?: number;
+  cash?: number;
 }
 
 export interface DailyBillsInput {

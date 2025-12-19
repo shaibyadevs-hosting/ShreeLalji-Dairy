@@ -122,6 +122,7 @@ function sanitizeResult(parsed: any) {
     cash: String(it.cash ?? ""),
     delPerson: String(it.delPerson ?? ""),
     phonenumber: String(it.phonenumber ?? it.phone ?? it.phoneNumber ?? ""),
+    packetPrice: String(it.packetPrice ?? ""),
   }));
 
   return { top, items };
@@ -168,7 +169,8 @@ TASK: Return ONLY valid JSON:
       "sale":"",
       "cash":"",
       "delPerson":"",
-      "phonenumber":""  
+      "phonenumber":"",
+      "packetPrice":""  
     }
   ]
 }
@@ -180,8 +182,9 @@ IMPORTANT EXTRACTION RULES:
 4. No extra metadata
 5. DATE: Extract the date from the sheet. Accept ANY date format you see (e.g., 17/09/2025, 17-09-25, 17-09-2025, 17/09/25, etc.). Return the date exactly as written in the sheet - do NOT convert or normalize it. The system will handle format conversion automatically.
 6. PHONE NUMBER: Extract phone numbers from the "PHONE NO." or "Phone Number" column. Include all digits, even if partially visible. If phone number is missing or empty, use empty string "".
-7. For each row, extract ALL visible fields including phone numbers
-8. Identify DelPerson as Nitin & Pushpa only.
+7. PACKET PRICE: Extract the packet price (Price / Packet) for EACH customer row. This is customer-specific and may vary per row. Look for price information in columns like "Price / Packet", "Packet Price", "Price", or similar. Extract as a number (e.g., "95", "100", "105"). If not found for a row, use empty string "".
+8. For each row, extract ALL visible fields including phone numbers and packet prices
+9. Identify DelPerson as Nitin & Pushpa only.
 `;
 
     const requestBody = {

@@ -150,7 +150,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       gradient: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
     },
     {
-      title: "Total Sales",
+      title: "Total Sales (Revenue)",
       value: formatCurrency(metrics?.totalSales || 0),
       change: "+8%",
       color: "from-green-500 to-green-600",
@@ -158,11 +158,27 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
     },
     {
-      title: "New Customers",
-      value: metrics?.newCustomers?.toString() || "0",
-      change: "+25%",
+      title: "Sample Expense",
+      value: formatCurrency((metrics as any)?.sampleExpense || 0),
+      change: "",
+      color: "from-orange-500 to-orange-600",
+      icon: <ShoppingBag className="w-5 h-5 text-white" />,
+      gradient: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+    },
+    {
+      title: "Return Expense",
+      value: formatCurrency((metrics as any)?.returnExpense || 0),
+      change: "",
+      color: "from-red-500 to-red-600",
+      icon: <Target className="w-5 h-5 text-white" />,
+      gradient: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+    },
+    {
+      title: "Net Revenue",
+      value: formatCurrency((metrics as any)?.netRevenue || 0),
+      change: "",
       color: "from-purple-500 to-purple-600",
-      icon: <UserPlus className="w-5 h-5 text-white" />,
+      icon: <TrendingUp className="w-5 h-5 text-white" />,
       gradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
     },
     {
@@ -200,6 +216,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+        
         <div className="max-w-2xl mx-auto mt-20">
           <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
             <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">

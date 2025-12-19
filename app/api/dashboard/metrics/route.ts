@@ -1,6 +1,6 @@
 // app/api/dashboard/metrics/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getSheetsClient } from "@/lib/googleSheets";
+import { getSheetsClient, getAllDailyBillsForMetrics } from "@/lib/googleSheets";
 
 type PurchaseHistoryEntry = {
   date: string;
@@ -49,6 +49,10 @@ type DashboardResponse = {
     inactiveCustomers: number;
     newCustomersCount: number;
   };
+  // New financial metrics
+  sampleExpense: number;
+  returnExpense: number;
+  netRevenue: number;
 };
 
 // ==================== Helper Functions ====================
@@ -333,23 +337,29 @@ export async function GET(_req: NextRequest) {
     // Load customers from MasterCustomers sheet ONLY
     const customers = await loadCustomers(sheets, spreadsheetId);
 
+    // Get financial metrics from daily sheets
+    const dailyMetrics = await getAllDailyBillsForMetrics();
+
     // 1. totalCustomers = number of rows (excluding header)
     const totalCustomers = customers.length;
 
-    // 2. totalSales = SUM of "Total Amount Spent" column
-    const totalSales = customers.reduce(
-      (sum, customer) => sum + customer.totalAmountSpent,
-      0
-    );
+    // 2. totalSales = SUM of Sale Amounts from daily sheets (NOT from MasterCustomers)
+    const totalSales = dailyMetrics.totalSaleAmount;
 
-    // 3. totalOrders = SUM of "Total Purchase Count" column
-    const totalOrders = customers.reduce(
-      (sum, customer) => sum + customer.purchaseCount,
-      0
-    );
+    // 3. totalOrders = Count of orders with saleQty > 0 from daily sheets
+    const totalOrders = dailyMetrics.totalOrders;
 
     // 4. avgOrderValue = totalSales / totalOrders
     const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+
+    // 5. Sample Expense = SUM of Sample Amounts from daily sheets
+    const sampleExpense = dailyMetrics.totalSampleAmount;
+
+    // 6. Return Expense = SUM of Return Amounts from daily sheets
+    const returnExpense = dailyMetrics.totalReturnAmount;
+
+    // 7. Net Revenue = Total Sales - Sample Expense - Return Expense
+    const netRevenue = totalSales - sampleExpense - returnExpense;
 
     // 5. topCustomers = top 10 by Total Amount Spent
     // Dashboard expects: { id, name, purchases, total }
@@ -394,12 +404,18 @@ export async function GET(_req: NextRequest) {
         inactiveCustomers,
         newCustomersCount: newCustomers,
       },
+      sampleExpense: Math.round(sampleExpense),
+      returnExpense: Math.round(returnExpense),
+      netRevenue: Math.round(netRevenue),
     };
 
-    console.log("[Dashboard] ✅ Metrics calculated from MasterCustomers:", {
+    console.log("[Dashboard] ✅ Metrics calculated:", {
       totalCustomers,
       totalSales: Math.round(totalSales),
       totalOrders,
+      sampleExpense: Math.round(sampleExpense),
+      returnExpense: Math.round(returnExpense),
+      netRevenue: Math.round(netRevenue),
     });
 
     return NextResponse.json(response);

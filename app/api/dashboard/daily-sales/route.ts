@@ -85,20 +85,22 @@ export async function GET(_req: NextRequest) {
         // Check if within last 30 days
         if (sheetDate < thirtyDaysAgo || sheetDate > today) continue;
 
-        // Read sheet data
+        // Read sheet data (columns A-N)
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheetName}!A:I`,
+          range: `${sheetName}!A:N`,
         });
 
         const rows = response.data.values || [];
         if (rows.length < 2) continue; // Skip if no data rows
 
-        // Sum cash column (column H, index 7)
+        // Sum Sale Amount column (column H, index 7)
+        // New structure: Date, Shop Name, Phone, Packet Price, Sale Qty, Sample Qty, Return Qty, Sale Amount, Sample Amount, Return Amount, Shift, Address, Rep, Delivery Person
         let dailyTotal = 0;
         for (let i = 1; i < rows.length; i++) {
-          const cash = parseFloat((rows[i][7] || "0").toString().replace(/[^\d.-]/g, "")) || 0;
-          dailyTotal += cash;
+          // Try new structure first (Sale Amount at index 7)
+          const saleAmount = parseFloat((rows[i][7] || "0").toString().replace(/[^\d.-]/g, "")) || 0;
+          dailyTotal += saleAmount;
         }
 
         // Add to bucket

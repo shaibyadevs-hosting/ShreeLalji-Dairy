@@ -56,11 +56,12 @@ function toDDMMYYYY(isoDate: string): string {
           { status: 400 }
         );
       }
-      // At least one of sale or cash should be present (can be 0)
-      if (item.sale === undefined && item.cash === undefined) {
+      // Validate that packetPrice, saleQty, sampleQty, returnQty are present
+      if (item.packetPrice === undefined || item.saleQty === undefined || 
+          item.sampleQty === undefined || item.returnQty === undefined) {
         return NextResponse.json(
           {
-            error: `Item at index ${i} is missing both sale and cash fields. At least one is required.`,
+            error: `Item at index ${i} is missing required fields: packetPrice, saleQty, sampleQty, or returnQty.`,
           },
           { status: 400 }
         );
@@ -76,8 +77,13 @@ function toDDMMYYYY(isoDate: string): string {
       items: body.items.map((item: any) => ({
         shopName: item.shopName || "",
         phone: item.phone || "",
-        sale: typeof item.sale === "number" ? item.sale : parseFloat(item.sale) || 0,
-        cash: typeof item.cash === "number" ? item.cash : parseFloat(item.cash) || 0,
+        packetPrice: typeof item.packetPrice === "number" ? item.packetPrice : parseFloat(item.packetPrice) || 95,
+        saleQty: typeof item.saleQty === "number" ? item.saleQty : parseFloat(item.saleQty) || 0,
+        sampleQty: typeof item.sampleQty === "number" ? item.sampleQty : parseFloat(item.sampleQty) || 0,
+        returnQty: typeof item.returnQty === "number" ? item.returnQty : parseFloat(item.returnQty) || 0,
+        saleAmount: typeof item.saleAmount === "number" ? item.saleAmount : parseFloat(item.saleAmount) || 0,
+        sampleAmount: typeof item.sampleAmount === "number" ? item.sampleAmount : parseFloat(item.sampleAmount) || 0,
+        returnAmount: typeof item.returnAmount === "number" ? item.returnAmount : parseFloat(item.returnAmount) || 0,
         address: item.address || "",
         rep: typeof item.rep === "number" ? item.rep : parseFloat(item.rep) || 0,
         delPerson: item.delPerson || "",
@@ -114,11 +120,11 @@ function toDDMMYYYY(isoDate: string): string {
     const displayDate = toDDMMYYYY(dailyBillsData.top.date);
 const sheetName = `${displayDate}-${dailyBillsData.top.shift}`;
 
-return NextResponse.json({
-  success: true,
+    return NextResponse.json({
+      success: true,
   message: `Successfully saved ${dailyBillsData.items.length} bill(s) to sheet: ${sheetName}`,
   sheetName,
-});
+    });
 
   } catch (error: any) {
     console.error("[SaveDailyBills] Error:", error);

@@ -11,7 +11,7 @@ import {
 // Initialize Google Sheets API
 const getGoogleSheetsClient = () => {
   const credentials = process.env.GOOGLE_SHEETS_CREDENTIALS;
- 
+
   if (!credentials) {
     throw new Error(
       "GOOGLE_SHEETS_CREDENTIALS not found in environment variables"
@@ -134,29 +134,29 @@ export async function getAllBills(): Promise<BillData[]> {
   const sheets = getGoogleSheetsClient();
 
   try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${DAILY_BILLS_SHEET}!A2:N`, // Skip header row
-    });
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${DAILY_BILLS_SHEET}!A2:N`, // Skip header row
+  });
 
-    const rows = response.data.values || [];
+  const rows = response.data.values || [];
 
-    return rows.map((row) => ({
-      date: row[0] || "",
-      billNumber: row[1] || "",
-      customerName: row[2] || "",
-      phoneNumber: row[3] || "",
-      products: row[4] || "",
-      quantity: row[5] || "",
-      price: row[6] || "",
-      totalAmount: row[7] || "",
-      paymentMethod: row[8] || "",
-      notes: row[9] || "",
-      imageSource: row[10] || "",
-      timestamp: row[11] || "",
-      shift: row[12] || "",
-      address: row[13] || "",
-    }));
+  return rows.map((row) => ({
+    date: row[0] || "",
+    billNumber: row[1] || "",
+    customerName: row[2] || "",
+    phoneNumber: row[3] || "",
+    products: row[4] || "",
+    quantity: row[5] || "",
+    price: row[6] || "",
+    totalAmount: row[7] || "",
+    paymentMethod: row[8] || "",
+    notes: row[9] || "",
+    imageSource: row[10] || "",
+    timestamp: row[11] || "",
+    shift: row[12] || "",
+    address: row[13] || "",
+  }));
   } catch (error) {
     if (isMissingSheetError(error)) {
       console.warn(
@@ -317,32 +317,32 @@ export async function getAllCustomers(): Promise<CustomerData[]> {
   const sheets = getGoogleSheetsClient();
 
   try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${MASTER_CUSTOMER_SHEET}!A2:H`, // Skip header row
-    });
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${MASTER_CUSTOMER_SHEET}!A2:H`, // Skip header row
+  });
 
-    const rows = response.data.values || [];
+  const rows = response.data.values || [];
 
-    return rows.map((row) => {
-      let purchaseHistory: PurchaseRecord[] = [];
-      try {
-        purchaseHistory = row[7] ? JSON.parse(row[7]) : [];
-      } catch (e) {
-        console.error("[GoogleSheets] Error parsing purchase history:", e);
-      }
+  return rows.map((row) => {
+    let purchaseHistory: PurchaseRecord[] = [];
+    try {
+      purchaseHistory = row[7] ? JSON.parse(row[7]) : [];
+    } catch (e) {
+      console.error("[GoogleSheets] Error parsing purchase history:", e);
+    }
 
-      return {
-        customerName: row[0] || "",
-        phoneNumber: row[1] || "",
-        email: row[2] || "",
-        address: row[3] || "",
-        totalPurchaseCount: parseInt(row[4] || "0"),
-        totalAmountSpent: parseFloat(row[5] || "0"),
-        lastPurchaseDate: row[6] || "",
-        purchaseHistory,
-      };
-    });
+    return {
+      customerName: row[0] || "",
+      phoneNumber: row[1] || "",
+      email: row[2] || "",
+      address: row[3] || "",
+      totalPurchaseCount: parseInt(row[4] || "0"),
+      totalAmountSpent: parseFloat(row[5] || "0"),
+      lastPurchaseDate: row[6] || "",
+      purchaseHistory,
+    };
+  });
   } catch (error) {
     if (isMissingSheetError(error)) {
       console.warn(
@@ -534,8 +534,13 @@ export async function createDailySheet(sheetName: string): Promise<void> {
       "Date",
       "Shop Name",
       "Phone",
-      "Sale",
-      "Cash",
+      "Packet Price",
+      "Sale Qty",
+      "Sample Qty",
+      "Return Qty",
+      "Sale Amount",
+      "Sample Amount",
+      "Return Amount",
       "Shift",
       "Address",
       "Rep",
@@ -544,7 +549,7 @@ export async function createDailySheet(sheetName: string): Promise<void> {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:I1`,
+      range: `${sheetName}!A1:N1`,
       valueInputOption: "RAW",
       requestBody: {
         values: [headers],
@@ -568,8 +573,13 @@ export async function appendDailyRows(
   items: Array<{
     shopName: string;
     phone: string;
-    sale: number;
-    cash: number;
+    packetPrice: number;
+    saleQty: number;
+    sampleQty: number;
+    returnQty: number;
+    saleAmount: number;
+    sampleAmount: number;
+    returnAmount: number;
     address: string;
     rep: number;
     delPerson: string;
@@ -582,8 +592,13 @@ export async function appendDailyRows(
       date,
       item.shopName,
       item.phone,
-      item.sale.toString(),
-      item.cash.toString(),
+      item.packetPrice.toString(),
+      item.saleQty.toString(),
+      item.sampleQty.toString(),
+      item.returnQty.toString(),
+      item.saleAmount.toString(),
+      item.sampleAmount.toString(),
+      item.returnAmount.toString(),
       shift,
       item.address,
       item.rep.toString(),
@@ -592,7 +607,7 @@ export async function appendDailyRows(
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:I`,
+      range: `${sheetName}!A:N`,
       valueInputOption: "RAW",
       requestBody: {
         values: rows,
@@ -710,6 +725,7 @@ export async function ensureMasterCustomerSheet(): Promise<void> {
 type PurchaseHistoryEntry = {
   date: string;
   amount: number;
+  saleQty?: number;
 };
 
 export async function updateOrInsertCustomer(
@@ -727,9 +743,15 @@ export async function updateOrInsertCustomer(
     }
 
     const normalizedPhone = normalizePhoneNumber(phoneRaw);
-    // Use cash value as specified (numeric cash value from bill)
-    const totalAmount = Number(item.cash) || 0;
-    const historyEntry: PurchaseHistoryEntry = { date, amount: totalAmount };
+    // Only count Sale Qty and Sale Amount for customer totals
+    // Sample and Return do NOT count toward customer purchase count or spending
+    const saleQty = Number(item.saleQty) || 0;
+    const saleAmount = Number(item.saleAmount) || 0;
+    const historyEntry: PurchaseHistoryEntry = { 
+      date, 
+      amount: saleAmount,
+      saleQty: saleQty 
+    };
     
     // Get today's date in DD-MM-YYYY format
     const today = formatDate(new Date());
@@ -757,8 +779,8 @@ export async function updateOrInsertCustomer(
         item.shopName || "Unknown Customer",
         normalizedPhone,
         item.address || "",
-        1, // Total Purchase Count
-        totalAmount, // Total Amount Spent
+        saleQty > 0 ? 1 : 0, // Total Purchase Count (only if saleQty > 0)
+        saleAmount, // Total Amount Spent (only Sale Amount)
         date, // Last Purchase Date
         JSON.stringify([historyEntry]), // Purchase History
         1, // Flag = 1 for insert
@@ -800,12 +822,14 @@ export async function updateOrInsertCustomer(
     }
 
     const updatedHistory = [...purchaseHistory, historyEntry];
+    // Only increment purchase count if there's a sale (saleQty > 0)
+    const purchaseCountIncrement = saleQty > 0 ? 1 : 0;
     const updatedRow = [
       existingRow[0] || item.shopName || "Unknown Customer",
       normalizedPhone,
       item.address || existingRow[2] || "",
-      existingCount + 1, // Increment purchase count
-      existingAmount + totalAmount, // Add to total amount
+      existingCount + purchaseCountIncrement, // Increment purchase count only for sales
+      existingAmount + saleAmount, // Add only Sale Amount to total
       date, // Update last purchase date
       JSON.stringify(updatedHistory), // Append to purchase history
       0, // Flag = 0 for update
@@ -1201,6 +1225,96 @@ export async function getAllCalls(): Promise<any[]> {
   } catch (error) {
     console.error("[CallFollowUps] ❌ Error fetching all calls:", error);
     throw error;
+  }
+}
+
+/**
+ * Get all daily bills from all daily sheets for financial calculations
+ */
+export async function getAllDailyBillsForMetrics(): Promise<{
+  totalSaleAmount: number;
+  totalSampleAmount: number;
+  totalReturnAmount: number;
+  totalOrders: number;
+}> {
+  try {
+    const sheets = getSheetsClient();
+    
+    // Get all sheets
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+
+    const sheetNames =
+      spreadsheet.data.sheets
+        ?.map((s) => s.properties?.title || "")
+        .filter((title) => !!title) || [];
+
+    // Filter daily sheets (DD-MM-YYYY-Shift pattern)
+    const dailySheets = sheetNames.filter((name) =>
+      /^\d{2}-\d{2}-\d{4}-/.test(name)
+    );
+
+    let totalSaleAmount = 0;
+    let totalSampleAmount = 0;
+    let totalReturnAmount = 0;
+    let totalOrders = 0;
+
+    // Process each daily sheet
+    for (const sheetName of dailySheets) {
+      try {
+        // Read sheet data (columns A-N)
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!A2:N`, // Skip header row
+        });
+
+        const rows = response.data.values || [];
+        
+        for (const row of rows) {
+          // Column indices:
+          // D = Packet Price (index 3)
+          // E = Sale Qty (index 4)
+          // F = Sample Qty (index 5)
+          // G = Return Qty (index 6)
+          // H = Sale Amount (index 7)
+          // I = Sample Amount (index 8)
+          // J = Return Amount (index 9)
+          
+          const saleAmount = parseFloat((row[7] || "0").toString()) || 0;
+          const sampleAmount = parseFloat((row[8] || "0").toString()) || 0;
+          const returnAmount = parseFloat((row[9] || "0").toString()) || 0;
+          const saleQty = parseFloat((row[4] || "0").toString()) || 0;
+
+          totalSaleAmount += saleAmount;
+          totalSampleAmount += sampleAmount;
+          totalReturnAmount += returnAmount;
+          
+          // Count orders (only sales count as orders)
+          if (saleQty > 0) {
+            totalOrders++;
+          }
+        }
+      } catch (error) {
+        console.warn(`[Metrics] Error processing sheet ${sheetName}:`, error);
+        continue;
+      }
+    }
+
+    return {
+      totalSaleAmount,
+      totalSampleAmount,
+      totalReturnAmount,
+      totalOrders,
+    };
+  } catch (error) {
+    console.error("[Metrics] Error fetching daily bills for metrics:", error);
+    return {
+      totalSaleAmount: 0,
+      totalSampleAmount: 0,
+      totalReturnAmount: 0,
+      totalOrders: 0,
+    };
   }
 }
 
