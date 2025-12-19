@@ -144,7 +144,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
     {
       title: "Total Customers",
       value: metrics?.totalCustomers?.toString() || "0",
-      change: "+12%",
+      change: "",
       color: "from-blue-500 to-blue-600",
       icon: <Users className="w-5 h-5 text-white" />,
       gradient: "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)",
@@ -152,7 +152,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
     {
       title: "Total Sales (Revenue)",
       value: formatCurrency(metrics?.totalSales || 0),
-      change: "+8%",
+      change: "",
       color: "from-green-500 to-green-600",
       icon: <DollarSign className="w-5 h-5 text-white" />,
       gradient: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
@@ -184,7 +184,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
     {
       title: "Avg Order Value",
       value: formatCurrency(metrics?.avgOrderValue || 0),
-      change: "+3%",
+      change: "",
       color: "from-amber-500 to-amber-600",
       icon: <TrendingUp className="w-5 h-5 text-white" />,
       gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",

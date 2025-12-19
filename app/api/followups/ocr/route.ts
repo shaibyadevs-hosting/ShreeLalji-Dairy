@@ -148,8 +148,8 @@ IMPORTANT EXTRACTION RULES:
 1. Return ONLY JSON array, no explanation or metadata
 2. Extract ALL visible rows from the image
 3. For each row, extract:
-   - name: Customer/Person name
-   - phone: Phone number (10 digits, remove spaces/dashes)
+   - name: Customer/Person/shopname name
+   - phone: Phone/Mobile number (10 digits, remove spaces/dashes)
    - callDate: Date in DD-MM-YYYY format (or as written, we'll normalize)
    - callTime: Time in HH:mm format (24-hour format preferred)
    - notes: Any additional notes or comments (optional)
