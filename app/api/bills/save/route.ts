@@ -87,6 +87,8 @@ function toDDMMYYYY(isoDate: string): string {
         address: item.address || "",
         rep: typeof item.rep === "number" ? item.rep : parseFloat(item.rep) || 0,
         delPerson: item.delPerson || "",
+        paymentStatus: item.paymentStatus || "",
+        balanceAmount: item.balanceAmount || "",
       })),
     };
 

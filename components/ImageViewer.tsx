@@ -188,60 +188,62 @@ export default function ImageViewer({
         )}
       </div>
 
-      <div className="tool-row">
-       <label className="upload-btn">
-  📁 Upload Image
-  <input
-    type="file"
-    accept="image/*"
-    onChange={onFileChange}
-    hidden
-  />
-</label>
-<br></br>
-        <button onClick={() => zoom(0.2)}>Zoom +</button>
-        <button onClick={() => zoom(-0.2)}>Zoom -</button>
-        <button onClick={rotateLeft}>Rotate ⟲</button>
-        <button onClick={rotateRight}>Rotate ⟳</button>
-        <button onClick={resetTransforms}>Reset</button>
-        <button
-          className="primary"
-          onClick={processImage}
-          disabled={images.length === 0 || isProcessing}
-        >
-          {isProcessing ? "Processing..." : "Process Image"}
-        </button>
-        <button className="danger" onClick={clearAll}>
-          Clear All
-        </button>
-      </div>
-
-      <div className="tool-row">
-        <button
-          onClick={onViewDashboard}
-          style={{
-            flex: 1,
-            padding: "10px",
-            background: "#1f6feb",
-            color: "#fff",
-            border: "none",
-            borderRadius: "6px",
-            fontWeight: 600,
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          📊 View Dashboard
-        </button>
-      </div>
-
-      <div className="status-row">
-        <div>
-          Image: {images.length === 0 ? 0 : index + 1}/{images.length}
+      <div className="controls-section">
+        <div className="tool-row">
+          <label className="upload-btn" style={{ padding: "6px 8px", borderRadius: "6px", border: "1px solid var(--border)", background: "#fff", cursor: "pointer", fontSize: "12px" }}>
+            📁 Upload
+            <input
+              type="file"
+              accept="image/*"
+              onChange={onFileChange}
+              hidden
+            />
+          </label>
+          <button onClick={() => zoom(0.2)}>+</button>
+          <button onClick={() => zoom(-0.2)}>-</button>
+          <button onClick={rotateLeft}>⟲</button>
+          <button onClick={rotateRight}>⟳</button>
+          <button onClick={resetTransforms}>Reset</button>
+          <button
+            className="primary"
+            onClick={processImage}
+            disabled={images.length === 0 || isProcessing}
+            style={{ fontSize: "12px", padding: "6px 10px" }}
+          >
+            {isProcessing ? "..." : "Process"}
+          </button>
+          <button className="danger" onClick={clearAll} style={{ fontSize: "12px", padding: "6px 10px" }}>
+            Clear
+          </button>
         </div>
-        <div>
-          Zoom: {Math.round(scale * 100)}% Rotate:{" "}
-          {((rotate % 360) + 360) % 360}°
+
+        <div className="tool-row">
+          <button
+            onClick={onViewDashboard}
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              background: "#1f6feb",
+              color: "#fff",
+              border: "none",
+              borderRadius: "6px",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            📊 Dashboard
+          </button>
+        </div>
+
+        <div className="status-row">
+          <div>
+            Image: {images.length === 0 ? 0 : index + 1}/{images.length}
+          </div>
+          <div>
+            Zoom: {Math.round(scale * 100)}% Rotate:{" "}
+            {((rotate % 360) + 360) % 360}°
+          </div>
         </div>
       </div>
     </aside>

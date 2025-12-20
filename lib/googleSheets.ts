@@ -545,11 +545,13 @@ export async function createDailySheet(sheetName: string): Promise<void> {
       "Address",
       "Rep",
       "Delivery Person",
+      "Payment Status",
+      "Balance Amount",
     ];
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:N1`,
+      range: `${sheetName}!A1:P1`,
       valueInputOption: "RAW",
       requestBody: {
         values: [headers],
@@ -583,6 +585,8 @@ export async function appendDailyRows(
     address: string;
     rep: number;
     delPerson: string;
+    paymentStatus?: string;
+    balanceAmount?: string;
   }>
 ): Promise<void> {
   try {
@@ -603,11 +607,13 @@ export async function appendDailyRows(
       item.address,
       item.rep.toString(),
       item.delPerson,
+      item.paymentStatus || "",
+      item.balanceAmount || "",
     ]);
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:N`,
+      range: `${sheetName}!A:P`,
       valueInputOption: "RAW",
       requestBody: {
         values: rows,
@@ -1229,54 +1235,6 @@ export async function getAllCalls(): Promise<any[]> {
 }
 
 /**
- * Get all pending calls (regardless of date)
- */
-export async function getAllPendingCalls(): Promise<any[]> {
-  try {
-    const sheets = getSheetsClient();
-    console.log(`[CallFollowUps] 🔍 Looking for all pending calls`);
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${CALL_FOLLOWUPS_SHEET}!A2:G`,
-    });
-
-    const rows = response.data.values || [];
-    console.log(`[CallFollowUps] 📋 Found ${rows.length} total rows in sheet`);
-    
-    const pendingCalls = rows
-      .filter((row) => {
-        const status = (row[5] || "").toString().trim();
-        const name = (row[0] || "").toString().trim();
-        
-        // Case-insensitive status check
-        const isPending = status.toLowerCase() === "pending";
-        
-        if (isPending) {
-          console.log(`[CallFollowUps] ✅ Including ${name}: status="${status}"`);
-        }
-        
-        return isPending;
-      })
-      .map((row) => ({
-        name: (row[0] || "").toString().trim(),
-        phone: (row[1] || "").toString().trim(),
-        callDate: (row[2] || "").toString().trim(),
-        callTime: (row[3] || "").toString().trim(),
-        notes: (row[4] || "").toString().trim(),
-        status: (row[5] || "").toString().trim(),
-        createdAt: (row[6] || "").toString().trim(),
-      }));
-
-    console.log(`[CallFollowUps] ✅ Found ${pendingCalls.length} pending call(s)`);
-    return pendingCalls;
-  } catch (error) {
-    console.error("[CallFollowUps] ❌ Error fetching pending calls:", error);
-    throw error;
-  }
-}
-
-/**
  * Get all daily bills from all daily sheets for financial calculations
  */
 export async function getAllDailyBillsForMetrics(): Promise<{
@@ -1284,6 +1242,7 @@ export async function getAllDailyBillsForMetrics(): Promise<{
   totalSampleAmount: number;
   totalReturnAmount: number;
   totalOrders: number;
+  totalBalanceAmount: number;
 }> {
   try {
     const sheets = getSheetsClient();
@@ -1307,14 +1266,15 @@ export async function getAllDailyBillsForMetrics(): Promise<{
     let totalSampleAmount = 0;
     let totalReturnAmount = 0;
     let totalOrders = 0;
+    let totalBalanceAmount = 0;
 
     // Process each daily sheet
     for (const sheetName of dailySheets) {
       try {
-        // Read sheet data (columns A-N)
+        // Read sheet data (columns A-P to include Payment Status and Balance Amount)
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheetName}!A2:N`, // Skip header row
+          range: `${sheetName}!A2:P`, // Skip header row, include Payment Status (O) and Balance Amount (P)
         });
 
         const rows = response.data.values || [];
@@ -1328,15 +1288,19 @@ export async function getAllDailyBillsForMetrics(): Promise<{
           // H = Sale Amount (index 7)
           // I = Sample Amount (index 8)
           // J = Return Amount (index 9)
+          // O = Payment Status (index 14)
+          // P = Balance Amount (index 15)
           
           const saleAmount = parseFloat((row[7] || "0").toString()) || 0;
           const sampleAmount = parseFloat((row[8] || "0").toString()) || 0;
           const returnAmount = parseFloat((row[9] || "0").toString()) || 0;
           const saleQty = parseFloat((row[4] || "0").toString()) || 0;
+          const balanceAmount = parseFloat((row[15] || "0").toString()) || 0;
 
           totalSaleAmount += saleAmount;
           totalSampleAmount += sampleAmount;
           totalReturnAmount += returnAmount;
+          totalBalanceAmount += balanceAmount;
           
           // Count orders (only sales count as orders)
           if (saleQty > 0) {
@@ -1354,6 +1318,7 @@ export async function getAllDailyBillsForMetrics(): Promise<{
       totalSampleAmount,
       totalReturnAmount,
       totalOrders,
+      totalBalanceAmount,
     };
   } catch (error) {
     console.error("[Metrics] Error fetching daily bills for metrics:", error);
@@ -1362,6 +1327,7 @@ export async function getAllDailyBillsForMetrics(): Promise<{
       totalSampleAmount: 0,
       totalReturnAmount: 0,
       totalOrders: 0,
+      totalBalanceAmount: 0,
     };
   }
 }

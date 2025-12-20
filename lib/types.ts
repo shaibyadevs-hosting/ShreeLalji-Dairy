@@ -41,6 +41,7 @@ export interface DashboardMetrics {
   totalSales: number;
   newCustomers: number;
   avgOrderValue: number;
+  totalBalanceAmount?: number;
   salesTrend: Array<{ month: string; sales: number; revenue: number }>;
   topProducts: Array<{ name: string; sales: number; revenue: number }>;
   topCustomers: Array<{
@@ -73,6 +74,8 @@ export interface DailyBillItem {
   address: string;
   rep: number;
   delPerson: string;
+  paymentStatus?: string;
+  balanceAmount?: string;
   // Legacy fields for backward compatibility
   sale?: number;
   cash?: number;

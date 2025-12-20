@@ -53,6 +53,7 @@ type DashboardResponse = {
   sampleExpense: number;
   returnExpense: number;
   netRevenue: number;
+  totalBalanceAmount: number;
 };
 
 // ==================== Helper Functions ====================
@@ -361,6 +362,9 @@ export async function GET(_req: NextRequest) {
     // 7. Net Revenue = Total Sales - Sample Expense - Return Expense
     const netRevenue = totalSales - sampleExpense - returnExpense;
 
+    // 8. Total Balance Amount = SUM of Balance Amounts from daily sheets
+    const totalBalanceAmount = dailyMetrics.totalBalanceAmount;
+
     // 5. topCustomers = top 10 by Total Amount Spent
     // Dashboard expects: { id, name, purchases, total }
     const topCustomers = customers
@@ -407,6 +411,7 @@ export async function GET(_req: NextRequest) {
       sampleExpense: Math.round(sampleExpense),
       returnExpense: Math.round(returnExpense),
       netRevenue: Math.round(netRevenue),
+      totalBalanceAmount: Math.round(totalBalanceAmount),
     };
 
     console.log("[Dashboard] ✅ Metrics calculated:", {
@@ -416,6 +421,7 @@ export async function GET(_req: NextRequest) {
       sampleExpense: Math.round(sampleExpense),
       returnExpense: Math.round(returnExpense),
       netRevenue: Math.round(netRevenue),
+      totalBalanceAmount: Math.round(totalBalanceAmount),
     });
 
     return NextResponse.json(response);

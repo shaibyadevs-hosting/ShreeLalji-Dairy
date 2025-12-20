@@ -181,13 +181,14 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       icon: <TrendingUp className="w-5 h-5 text-white" />,
       gradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
     },
+   
     {
       title: "Avg Order Value",
       value: formatCurrency(metrics?.avgOrderValue || 0),
       change: "",
-      color: "from-amber-500 to-amber-600",
+      color: "from-cyan-500 to-cyan-600",
       icon: <TrendingUp className="w-5 h-5 text-white" />,
-      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
     },
   ];
 
