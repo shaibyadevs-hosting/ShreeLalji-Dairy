@@ -1229,6 +1229,54 @@ export async function getAllCalls(): Promise<any[]> {
 }
 
 /**
+ * Get all pending calls (regardless of date)
+ */
+export async function getAllPendingCalls(): Promise<any[]> {
+  try {
+    const sheets = getSheetsClient();
+    console.log(`[CallFollowUps] 🔍 Looking for all pending calls`);
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${CALL_FOLLOWUPS_SHEET}!A2:G`,
+    });
+
+    const rows = response.data.values || [];
+    console.log(`[CallFollowUps] 📋 Found ${rows.length} total rows in sheet`);
+    
+    const pendingCalls = rows
+      .filter((row) => {
+        const status = (row[5] || "").toString().trim();
+        const name = (row[0] || "").toString().trim();
+        
+        // Case-insensitive status check
+        const isPending = status.toLowerCase() === "pending";
+        
+        if (isPending) {
+          console.log(`[CallFollowUps] ✅ Including ${name}: status="${status}"`);
+        }
+        
+        return isPending;
+      })
+      .map((row) => ({
+        name: (row[0] || "").toString().trim(),
+        phone: (row[1] || "").toString().trim(),
+        callDate: (row[2] || "").toString().trim(),
+        callTime: (row[3] || "").toString().trim(),
+        notes: (row[4] || "").toString().trim(),
+        status: (row[5] || "").toString().trim(),
+        createdAt: (row[6] || "").toString().trim(),
+      }));
+
+    console.log(`[CallFollowUps] ✅ Found ${pendingCalls.length} pending call(s)`);
+    return pendingCalls;
+  } catch (error) {
+    console.error("[CallFollowUps] ❌ Error fetching pending calls:", error);
+    throw error;
+  }
+}
+
+/**
  * Get all daily bills from all daily sheets for financial calculations
  */
 export async function getAllDailyBillsForMetrics(): Promise<{

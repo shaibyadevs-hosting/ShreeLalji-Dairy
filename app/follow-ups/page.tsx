@@ -1,7 +1,7 @@
 // app/follow-ups/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Phone, 
@@ -69,6 +69,14 @@ export default function FollowUpsPage() {
     saved?: number;
     duplicates?: number;
   } | null>(null);
+
+  // Pending calls modal state
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [pendingCalls, setPendingCalls] = useState<CallFollowUp[]>([]);
+  const [isLoadingPending, setIsLoadingPending] = useState(false);
+
+  // Date input ref for calendar picker
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   // Load today's calls and stats on mount
   useEffect(() => {
@@ -445,6 +453,33 @@ export default function FollowUpsPage() {
     loadTodayCalls();
   };
 
+  // Load all pending calls
+  const loadPendingCalls = async () => {
+    try {
+      setIsLoadingPending(true);
+      const response = await fetch("/api/followups/pending");
+      const data = await response.json();
+
+      if (data.success) {
+        setPendingCalls(data.calls || []);
+        setShowPendingModal(true);
+      } else {
+        console.error("Failed to load pending calls:", data.error);
+        alert("❌ Failed to load pending calls: " + (data.error || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Error loading pending calls:", error);
+      alert("❌ Error loading pending calls");
+    } finally {
+      setIsLoadingPending(false);
+    }
+  };
+
+  // Handle pending card click
+  const handlePendingClick = () => {
+    loadPendingCalls();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50">
       {/* Header */}
@@ -500,17 +535,22 @@ export default function FollowUpsPage() {
             </div>
           </div>
           
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+          <button
+            onClick={handlePendingClick}
+            disabled={isLoadingPending}
+            className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 hover:shadow-xl hover:border-amber-300 transition-all cursor-pointer text-left w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Pending</p>
                 <p className="text-3xl font-bold text-amber-600">{stats.pending}</p>
+                <p className="text-xs text-gray-400 mt-1">Click to view all</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-amber-50 to-amber-100 flex items-center justify-center">
                 <Clock className="w-6 h-6 text-amber-600" />
               </div>
             </div>
-          </div>
+          </button>
           
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
             <div className="flex items-center justify-between">
@@ -835,20 +875,37 @@ export default function FollowUpsPage() {
                     Filter by Date
                   </label>
                   <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={selectedDate}
-                      onChange={handleDateChange}
-                      readOnly
-                      onKeyDown={(e) => {
-                        // Prevent manual typing but allow calendar to open
-                        if (e.key !== "Tab" && e.key !== "Enter") {
-                          e.preventDefault();
-                        }
-                      }}
-                      onPaste={(e) => e.preventDefault()}
-                      className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition cursor-pointer"
-                    />
+                    <div className="flex-1 relative">
+                      <input
+                        ref={dateInputRef}
+                        type="date"
+                        value={selectedDate}
+                        onChange={handleDateChange}
+                        onClick={(e) => {
+                          // Ensure calendar opens on click
+                          const input = e.target as HTMLInputElement;
+                          input.showPicker?.();
+                        }}
+                        onFocus={(e) => {
+                          // Open calendar when focused
+                          const input = e.target as HTMLInputElement;
+                          input.showPicker?.();
+                        }}
+                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition cursor-pointer"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // Trigger date picker when calendar icon is clicked
+                          dateInputRef.current?.showPicker?.();
+                          dateInputRef.current?.focus();
+                        }}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Open calendar"
+                      >
+                        <Calendar className="w-5 h-5" />
+                      </button>
+                    </div>
                     {selectedDate && (
                       <button
                         onClick={handleShowToday}
@@ -996,6 +1053,140 @@ export default function FollowUpsPage() {
           </p>
         </div>
       </main>
+
+      {/* Pending Calls Modal */}
+      {showPendingModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-amber-50 to-amber-100 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">All Pending Calls</h2>
+                  <p className="text-sm text-gray-500">{pendingCalls.length} pending call(s)</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPendingModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <XCircle className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {isLoadingPending ? (
+                <div className="p-12 text-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">Loading pending calls...</p>
+                </div>
+              ) : pendingCalls.length === 0 ? (
+                <div className="p-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">No pending calls</h4>
+                  <p className="text-gray-500">All calls have been completed!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {pendingCalls.map((call, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 border border-gray-200 rounded-xl hover:border-amber-300 hover:shadow-md transition-all bg-white"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 flex items-center justify-center flex-shrink-0">
+                          <span className="text-white font-medium text-sm">
+                            {call.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-semibold text-gray-900 text-lg">{call.name}</h4>
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                              {call.status}
+                            </span>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Phone className="w-4 h-4" />
+                              <span className="font-medium">{call.phone}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Calendar className="w-4 h-4" />
+                              <span>
+                                <span className="font-medium">Date:</span> {formatDate(call.callDate)}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Clock className="w-4 h-4" />
+                              <span>
+                                <span className="font-medium">Time:</span> {call.callTime}
+                              </span>
+                            </div>
+                            
+                            {call.notes && (
+                              <div className="flex items-start gap-2 text-sm text-gray-600 mt-2">
+                                <MessageSquare className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <span className="font-medium">Notes: </span>
+                                  <span>{call.notes}</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {call.createdAt && (
+                              <div className="flex items-center gap-2 text-xs text-gray-400 mt-2">
+                                <span>Created: {call.createdAt}</span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <button
+                            onClick={() => {
+                              handleMarkAsCalled(call.phone, call.callDate);
+                              // Refresh pending calls after marking as called
+                              setTimeout(() => {
+                                loadPendingCalls();
+                              }, 500);
+                            }}
+                            className="mt-4 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm rounded-lg font-medium hover:shadow-lg hover:shadow-green-500/25 transition-all flex items-center gap-2"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Mark as Called
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-gray-200 flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                Showing {pendingCalls.length} of {stats.pending} pending call(s)
+              </p>
+              <button
+                onClick={() => setShowPendingModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
