@@ -117,6 +117,31 @@ type CustomerInsightsData = {
 
 type RepeatFilter = "2x" | "3x" | "4+";
 
+// Today's Delivery List Types
+type DeliveryShop = {
+  shopName: string;
+  phone: string;
+  address: string;
+  saleQty: number;
+  saleAmount: number;
+};
+
+type DeliveryPersonGroup = {
+  deliveryPerson: string;
+  shops: DeliveryShop[];
+  totalShops: number;
+  totalSaleAmount: number;
+};
+
+type TodayDeliveryListData = {
+  deliveryGroups: DeliveryPersonGroup[];
+  totalDeliveryPersons: number;
+  totalShops: number;
+  date: string;
+  shift: string;
+  message?: string;
+};
+
 const Dashboard = ({ onBack }: { onBack: () => void }) => {
   const [viewMode, setViewMode] = useState<ViewMode>("chart");
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -143,6 +168,17 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
   });
   const [repeatFilter, setRepeatFilter] = useState<RepeatFilter>("2x");
   const [customerSearch, setCustomerSearch] = useState("");
+
+  // Today's Delivery List state
+  const [todayDeliveryList, setTodayDeliveryList] = useState<TodayDeliveryListData | null>(null);
+  const [deliveryListLoading, setDeliveryListLoading] = useState(false);
+  const [deliveryListDate, setDeliveryListDate] = useState<string>(() => {
+    const today = new Date();
+    return `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+  });
+  const [deliveryListShift, setDeliveryListShift] = useState<"Morning" | "Evening">("Morning");
+  const [deliveryListSearch, setDeliveryListSearch] = useState("");
+  const [expandedDeliveryPersons, setExpandedDeliveryPersons] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchAllData();
@@ -226,6 +262,67 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       fetchCustomerInsights(customerSelectedDate);
     }
   }, [viewMode, customerSelectedDate]);
+
+  // Fetch Today's Delivery List
+  async function fetchTodayDeliveryList(date?: string, shift?: string) {
+    try {
+      setDeliveryListLoading(true);
+      const dateParam = date || deliveryListDate;
+      const shiftParam = shift || deliveryListShift;
+      const response = await fetch(`/api/dashboard/delivery-list?date=${dateParam}&shift=${shiftParam}`);
+      if (response.ok) {
+        const data = await response.json();
+        setTodayDeliveryList(data);
+        // Expand all delivery persons by default
+        if (data.deliveryGroups) {
+          setExpandedDeliveryPersons(new Set(data.deliveryGroups.map((g: DeliveryPersonGroup) => g.deliveryPerson)));
+        }
+      }
+    } catch (err) {
+      console.error("[Dashboard] Error fetching today's delivery list:", err);
+    } finally {
+      setDeliveryListLoading(false);
+    }
+  }
+
+  // Fetch delivery list when switching to delivery view or when date/shift changes
+  useEffect(() => {
+    if (viewMode === "delivery") {
+      fetchTodayDeliveryList(deliveryListDate, deliveryListShift);
+    }
+  }, [viewMode, deliveryListDate, deliveryListShift]);
+
+  // Toggle expand/collapse for delivery person
+  const toggleDeliveryPersonExpand = (deliveryPerson: string) => {
+    setExpandedDeliveryPersons(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(deliveryPerson)) {
+        newSet.delete(deliveryPerson);
+      } else {
+        newSet.add(deliveryPerson);
+      }
+      return newSet;
+    });
+  };
+
+  // Filtered delivery list data
+  const filteredDeliveryListData = React.useMemo(() => {
+    if (!todayDeliveryList?.deliveryGroups) return [];
+    
+    if (!deliveryListSearch.trim()) return todayDeliveryList.deliveryGroups;
+    
+    const search = deliveryListSearch.toLowerCase();
+    return todayDeliveryList.deliveryGroups
+      .map(group => ({
+        ...group,
+        shops: group.shops.filter(shop => 
+          shop.shopName.toLowerCase().includes(search) ||
+          shop.phone.includes(search) ||
+          shop.address.toLowerCase().includes(search)
+        )
+      }))
+      .filter(group => group.shops.length > 0 || group.deliveryPerson.toLowerCase().includes(search));
+  }, [todayDeliveryList, deliveryListSearch]);
 
   const salesData = metrics?.salesTrend || [];
   const topCustomers = metrics?.topCustomers || [];
@@ -1083,6 +1180,204 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </div>
+
+          {/* Today's Delivery List Section */}
+          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 mt-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 flex items-center justify-center">
+                    <Truck className="w-6 h-6 text-white" />
+                  </div>
+                  Today&apos;s Delivery List
+                </h2>
+                <p className="text-gray-500 mt-1">Operational delivery execution for selected date/shift</p>
+              </div>
+            </div>
+
+            {/* Date and Shift Selector */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date (DD-MM-YYYY)</label>
+                <input
+                  type="text"
+                  placeholder="DD-MM-YYYY"
+                  value={deliveryListDate}
+                  onChange={(e) => setDeliveryListDate(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
+                />
+              </div>
+              <div className="w-full sm:w-48">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Shift</label>
+                <select
+                  value={deliveryListShift}
+                  onChange={(e) => setDeliveryListShift(e.target.value as "Morning" | "Evening")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-white"
+                >
+                  <option value="Morning">Morning</option>
+                  <option value="Evening">Evening</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search Shop/Phone/Address</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search..."
+                    value={deliveryListSearch}
+                    onChange={(e) => setDeliveryListSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
+                  />
+                </div>
+              </div>
+              <div className="w-full sm:w-auto flex items-end">
+                <button
+                  onClick={() => fetchTodayDeliveryList()}
+                  disabled={deliveryListLoading}
+                  className="w-full sm:w-auto px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${deliveryListLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {/* Summary Stats */}
+            {todayDeliveryList && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div className="bg-gradient-to-r from-teal-50 to-teal-100 rounded-xl p-4 border border-teal-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-teal-500 flex items-center justify-center">
+                      <Users className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-teal-600 font-medium">Delivery Persons</p>
+                      <p className="text-2xl font-bold text-teal-800">{todayDeliveryList.totalDeliveryPersons}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-gradient-to-r from-cyan-50 to-cyan-100 rounded-xl p-4 border border-cyan-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-cyan-500 flex items-center justify-center">
+                      <ShoppingBag className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-cyan-600 font-medium">Total Shops</p>
+                      <p className="text-2xl font-bold text-cyan-800">{todayDeliveryList.totalShops}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-blue-600 font-medium">Date / Shift</p>
+                      <p className="text-lg font-bold text-blue-800">{todayDeliveryList.date} - {todayDeliveryList.shift}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading State */}
+            {deliveryListLoading && (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 border-4 border-teal-100 border-t-teal-600 rounded-full animate-spin mx-auto"></div>
+                <p className="mt-4 text-gray-500">Loading delivery list...</p>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!deliveryListLoading && (!filteredDeliveryListData || filteredDeliveryListData.length === 0) && (
+              <div className="text-center py-12">
+                <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Truck className="w-10 h-10 text-gray-400" />
+                </div>
+                <h4 className="text-xl font-medium text-gray-600 mb-2">No deliveries found</h4>
+                <p className="text-gray-500">
+                  {todayDeliveryList?.message || `No delivery data for ${deliveryListDate} ${deliveryListShift}`}
+                </p>
+              </div>
+            )}
+
+            {/* Delivery Person Groups */}
+            {!deliveryListLoading && filteredDeliveryListData && filteredDeliveryListData.length > 0 && (
+              <div className="space-y-4">
+                {filteredDeliveryListData.map((group, groupIdx) => (
+                  <div key={groupIdx} className="border border-gray-200 rounded-xl overflow-hidden">
+                    {/* Delivery Person Header */}
+                    <button
+                      onClick={() => toggleDeliveryPersonExpand(group.deliveryPerson)}
+                      className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-150 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 flex items-center justify-center text-white text-lg font-semibold shadow-md">
+                          {group.deliveryPerson.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="text-left">
+                          <h3 className="font-semibold text-gray-800 text-lg">{group.deliveryPerson}</h3>
+                          <p className="text-sm text-gray-500">
+                            {group.totalShops} shop{group.totalShops !== 1 ? 's' : ''} • ₹{group.totalSaleAmount.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="px-3 py-1 bg-teal-100 text-teal-700 rounded-full text-sm font-medium">
+                          {group.totalShops} deliveries
+                        </span>
+                        <ChevronLeft className={`w-5 h-5 text-gray-400 transition-transform ${expandedDeliveryPersons.has(group.deliveryPerson) ? '-rotate-90' : 'rotate-0'}`} />
+                      </div>
+                    </button>
+
+                    {/* Shop List (Expandable) */}
+                    {expandedDeliveryPersons.has(group.deliveryPerson) && (
+                      <div className="divide-y divide-gray-100">
+                        {group.shops.map((shop, shopIdx) => (
+                          <div key={shopIdx} className="p-4 bg-white hover:bg-gray-50 transition-colors">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="w-6 h-6 rounded-full bg-teal-100 text-teal-700 text-xs font-semibold flex items-center justify-center">
+                                    {shopIdx + 1}
+                                  </span>
+                                  <h4 className="font-semibold text-gray-800">{shop.shopName}</h4>
+                                </div>
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600 ml-8">
+                                  {shop.phone && (
+                                    <a href={`tel:${shop.phone}`} className="flex items-center gap-1 text-blue-600 hover:text-blue-700">
+                                      <Phone className="w-4 h-4" />
+                                      {shop.phone}
+                                    </a>
+                                  )}
+                                  {shop.address && (
+                                    <span className="flex items-center gap-1">
+                                      <span className="text-gray-400">📍</span>
+                                      {shop.address}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3 ml-8 sm:ml-0">
+                                <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-lg text-sm">
+                                  {shop.saleQty} qty
+                                </span>
+                                <span className="font-semibold text-green-600">
+                                  ₹{shop.saleAmount.toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
