@@ -1380,3 +1380,243 @@ export async function updateCallStatus(
     throw error;
   }
 }
+
+// ============================================
+// DELIVERY PERSON SUMMARY FUNCTIONALITY
+// ============================================
+
+const DELIVERY_SUMMARY_SHEET = "Delivery_Summary";
+const DELIVERY_SUMMARY_HEADERS = [
+  "Delivery Person",
+  "Total Orders",
+  "Total Sale Amount",
+  "Total Cash Amount",
+];
+
+/**
+ * Ensure Delivery_Summary sheet exists with proper headers
+ */
+export async function ensureDeliverySummarySheet(): Promise<void> {
+  try {
+    const sheets = getSheetsClient();
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+
+    const sheetNames =
+      spreadsheet.data.sheets?.map((s) => s.properties?.title) || [];
+
+    if (!sheetNames.includes(DELIVERY_SUMMARY_SHEET)) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [
+            {
+              addSheet: {
+                properties: {
+                  title: DELIVERY_SUMMARY_SHEET,
+                },
+              },
+            },
+          ],
+        },
+      });
+      console.log("[DeliverySummary] ✅ Created Delivery_Summary sheet");
+    }
+
+    // Enforce headers
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${DELIVERY_SUMMARY_SHEET}!A1:D1`,
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [DELIVERY_SUMMARY_HEADERS],
+      },
+    });
+
+    console.log("[DeliverySummary] ✅ Sheet ready with headers");
+  } catch (error) {
+    console.error("[DeliverySummary] ❌ Error ensuring sheet:", error);
+    throw error;
+  }
+}
+
+/**
+ * Update Delivery_Summary with bill items
+ * Groups by delivery person and updates totals
+ */
+export async function updateDeliverySummary(
+  items: Array<{
+    delPerson: string;
+    saleAmount: number;
+    paymentStatus?: string;
+  }>
+): Promise<void> {
+  try {
+    await ensureDeliverySummarySheet();
+    const sheets = getSheetsClient();
+
+    // Get existing summary data
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${DELIVERY_SUMMARY_SHEET}!A2:D`,
+    });
+
+    const rows = response.data.values || [];
+
+    // Build a map of existing delivery person data
+    const deliveryMap = new Map<
+      string,
+      { rowIndex: number; orders: number; saleAmount: number; cashAmount: number }
+    >();
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const name = (row[0] || "").toString().trim().toLowerCase();
+      if (name) {
+        deliveryMap.set(name, {
+          rowIndex: i + 2, // +2 for 1-indexed and header row
+          orders: parseInt(row[1] || "0") || 0,
+          saleAmount: parseFloat(row[2] || "0") || 0,
+          cashAmount: parseFloat(row[3] || "0") || 0,
+        });
+      }
+    }
+
+    // Aggregate new items by delivery person
+    const updates = new Map<
+      string,
+      { orders: number; saleAmount: number; cashAmount: number }
+    >();
+
+    for (const item of items) {
+      const delPerson = (item.delPerson || "").toString().trim();
+      if (!delPerson) continue; // Skip empty/null delivery persons
+
+      const key = delPerson.toLowerCase();
+      const existing = updates.get(key) || { orders: 0, saleAmount: 0, cashAmount: 0 };
+
+      existing.orders += 1;
+      existing.saleAmount += item.saleAmount || 0;
+
+      // If payment status is "Cash" or "Paid", add to cash amount
+      const paymentStatus = (item.paymentStatus || "").toString().toLowerCase();
+      if (paymentStatus === "cash" || paymentStatus === "paid") {
+        existing.cashAmount += item.saleAmount || 0;
+      }
+
+      updates.set(key, existing);
+    }
+
+    // Apply updates
+    const newRows: string[][] = [];
+    const updateRequests: Array<{
+      range: string;
+      values: string[][];
+    }> = [];
+
+    for (const [key, data] of updates) {
+      const existing = deliveryMap.get(key);
+
+      if (existing) {
+        // Update existing row
+        const newOrders = existing.orders + data.orders;
+        const newSaleAmount = existing.saleAmount + data.saleAmount;
+        const newCashAmount = existing.cashAmount + data.cashAmount;
+
+        // Find original case-preserved name from existing rows
+        const originalName = rows[existing.rowIndex - 2]?.[0] || key;
+
+        updateRequests.push({
+          range: `${DELIVERY_SUMMARY_SHEET}!A${existing.rowIndex}:D${existing.rowIndex}`,
+          values: [[
+            originalName,
+            newOrders.toString(),
+            newSaleAmount.toString(),
+            newCashAmount.toString(),
+          ]],
+        });
+      } else {
+        // Find original case-preserved name from items
+        const originalName = items.find(
+          (i) => (i.delPerson || "").toString().trim().toLowerCase() === key
+        )?.delPerson || key;
+
+        newRows.push([
+          originalName,
+          data.orders.toString(),
+          data.saleAmount.toString(),
+          data.cashAmount.toString(),
+        ]);
+      }
+    }
+
+    // Execute updates for existing rows
+    for (const req of updateRequests) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SPREADSHEET_ID,
+        range: req.range,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: req.values,
+        },
+      });
+    }
+
+    // Append new rows
+    if (newRows.length > 0) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${DELIVERY_SUMMARY_SHEET}!A:D`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: newRows,
+        },
+      });
+    }
+
+    console.log(
+      `[DeliverySummary] ✅ Updated ${updateRequests.length} existing, added ${newRows.length} new delivery persons`
+    );
+  } catch (error) {
+    console.error("[DeliverySummary] ❌ Error updating summary:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get all delivery person summaries from the Delivery_Summary sheet
+ */
+export async function getDeliverySummary(): Promise<
+  Array<{
+    deliveryPerson: string;
+    totalOrders: number;
+    totalSaleAmount: number;
+    totalCashAmount: number;
+  }>
+> {
+  try {
+    await ensureDeliverySummarySheet();
+    const sheets = getSheetsClient();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${DELIVERY_SUMMARY_SHEET}!A2:D`,
+    });
+
+    const rows = response.data.values || [];
+
+    return rows
+      .map((row) => ({
+        deliveryPerson: (row[0] || "").toString().trim(),
+        totalOrders: parseInt(row[1] || "0") || 0,
+        totalSaleAmount: parseFloat(row[2] || "0") || 0,
+        totalCashAmount: parseFloat(row[3] || "0") || 0,
+      }))
+      .filter((item) => item.deliveryPerson) // Filter out empty entries
+      .sort((a, b) => b.totalOrders - a.totalOrders); // Sort by total orders descending
+  } catch (error) {
+    console.error("[DeliverySummary] ❌ Error getting summary:", error);
+    return [];
+  }
+}

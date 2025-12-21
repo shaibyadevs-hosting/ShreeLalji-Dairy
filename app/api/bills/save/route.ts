@@ -5,6 +5,7 @@ import {
   getSheetsClient,
   saveDailyBills,
   updateOrInsertCustomer,
+  updateDeliverySummary,
 } from "@/lib/googleSheets";
 import { DailyBillsInput } from "@/lib/types";
 
@@ -118,6 +119,9 @@ function toDDMMYYYY(isoDate: string): string {
         dailyBillsData.top.date
       );
     }
+
+    // Update Delivery Person Summary
+    await updateDeliverySummary(dailyBillsData.items);
 
     const displayDate = toDDMMYYYY(dailyBillsData.top.date);
 const sheetName = `${displayDate}-${dailyBillsData.top.shift}`;

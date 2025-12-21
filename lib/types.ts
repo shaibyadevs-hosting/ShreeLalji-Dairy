@@ -85,3 +85,11 @@ export interface DailyBillsInput {
   top: DailyBillTop;
   items: DailyBillItem[];
 }
+
+// Delivery Person Summary Types
+export interface DeliveryPersonSummary {
+  deliveryPerson: string;
+  totalOrders: number;
+  totalSaleAmount: number;
+  totalCashAmount: number;
+}
