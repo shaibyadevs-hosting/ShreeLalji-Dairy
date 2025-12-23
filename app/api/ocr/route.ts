@@ -96,6 +96,69 @@ function normalizeDate(dateStr: string | undefined | null): string {
 }
 
 /**
+ * Normalize follow-up date from various formats to YYYY-MM-DD (HTML date input format)
+ * Handles formats like: "25th Dec 2025", "28th Dec 2025", "25-12-2025", "25/12/2025", etc.
+ */
+function normalizeFollowUpDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return "";
+  
+  const str = String(dateStr).trim();
+  if (!str) return "";
+
+  // Format: "25th Dec 2025" or "28th Dec 2025"
+  const monthMap: { [key: string]: string } = {
+    jan: "01", january: "01",
+    feb: "02", february: "02",
+    mar: "03", march: "03",
+    apr: "04", april: "04",
+    may: "05",
+    jun: "06", june: "06",
+    jul: "07", july: "07",
+    aug: "08", august: "08",
+    sep: "09", sept: "09", september: "09",
+    oct: "10", october: "10",
+    nov: "11", november: "11",
+    dec: "12", december: "12"
+  };
+
+  // Match "25th Dec 2025" or "25 Dec 2025"
+  let match = str.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([a-zA-Z]+)\s+(\d{4})/i);
+  if (match) {
+    const [, day, monthName, year] = match;
+    const month = monthMap[monthName.toLowerCase()];
+    if (month) {
+      return `${year}-${month}-${day.padStart(2, "0")}`;
+    }
+  }
+
+  // DD-MM-YYYY format
+  if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(str)) {
+    const parts = str.split("-");
+    return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+  }
+
+  // DD/MM/YYYY format
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+    const parts = str.split("/");
+    return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+  }
+
+  // Already in YYYY-MM-DD format
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(str)) {
+    const parts = str.split("-");
+    return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
+  }
+
+  // MM/DD/YYYY format (US)
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
+    const parts = str.split("/");
+    // Assume DD/MM/YYYY for non-US context (already handled above)
+  }
+
+  return str;
+}
+
+/**
  * Ensure returned top and items have proper defaults and shape expected by client.
  */
 function sanitizeResult(parsed: any) {
@@ -123,7 +186,8 @@ function sanitizeResult(parsed: any) {
     delPerson: String(it.delPerson ?? ""),
     phonenumber: String(it.phonenumber ?? it.phone ?? it.phoneNumber ?? ""),
     packetPrice: String(it.packetPrice ?? ""),
-    paymentStatus: String(it.paymentStatus ?? it.payment ?? it.status ?? ""),
+    cashAmount: String(it.cashAmount ?? ""),
+    followUpsDate: normalizeFollowUpDate(it.followUpsDate ?? it.followupDate ?? it.followUpDate ?? ""),
     balanceAmount: String(it.balanceAmount ?? it.balance ?? it.dueAmount ?? it.outstanding ?? ""),
   }));
 
@@ -173,7 +237,8 @@ TASK: Return ONLY valid JSON:
       "delPerson":"",
       "phonenumber":"",
       "packetPrice":"",
-      "paymentStatus":"",
+      "cashAmount":"",
+      "followUpsDate":"",
       "balanceAmount":""
     }
   ]
@@ -185,58 +250,51 @@ IMPORTANT EXTRACTION RULES:
 3. Empty string "" for unknown or missing fields
 4. No extra metadata or comments in JSON
 5. DATE: Extract the date from the top header section. Accept ANY date format (e.g., 17/09/2025, 17-09-25, 17-09-2025, 17/09/25, etc.). Return exactly as written.
-6. PHONE NUMBER: Extract from "Mobile Number" column. Include all 10 digits. If missing, use empty string "".
-7. SHOP NAME: Extract from "Shop / Customer Name" column.
-8. ADDRESS/AREA: Extract from "Area" column into the address field.
-9. PACKET PRICE: Extract from "Price / Packet (₹)" column. Extract as number string (e.g., "195", "185", "190"). Remove ₹ symbol if present.
-10. SAMPLE QTY: Extract from "Sample Qty" column. Extract as number string (e.g., "0", "2", "1").
-11. SALE QTY: Extract from "Sale Qty" column. Extract as number string (e.g., "0", "3", "4", "6").
-12. REPLACEMENT QTY: Extract from "Replacement Qty" column into the rep field. Extract as number string (e.g., "0", "1").
-13. DELIVERY PERSON: Extract from "Delivery Person" column. Should be "Nitin" or "Pushpa".
-14. PAYMENT STATUS (CRITICAL - COLUMN 8): Extract the ACTUAL CELL VALUE from the "Payment Status" column for EACH DATA ROW.
-    - IMPORTANT: The column HEADER is "Payment Status" - DO NOT extract this header text
-    - Extract the VALUE inside each DATA CELL below the header row
-    - For Row 1: Look at the cell in Payment Status column, Row 1 - extract "Paid" or "Balance" (the actual value)
-    - For Row 2: Look at the cell in Payment Status column, Row 2 - extract "Paid" or "Balance" (the actual value)
-    - Continue for all rows
-    - Extract the status text from each cell:
-      * If cell shows "Paid", extract "Paid" (not "Payment Status")
-      * If cell shows "Balance", extract "Balance" (not "Payment Status")
-      * If cell shows "Pending", extract "Pending"
-      * Extract EXACTLY what is written in the DATA CELL, not the column header
-    - Example: If header says "Payment Status" and Row 1 cell says "Paid", extract "Paid" (not "Payment Status")
+6. PHONE NUMBER: Extract from "Mobile no" or "Mobile Number" column. Include all 10 digits. If missing, use empty string "".
+7. SHOP NAME: Extract from "Customer Name" or "Shop / Customer Name" column.
+8. ADDRESS/AREA: Extract from "Address" or "Area" column into the address field.
+9. PACKET PRICE: Extract from "Per Packet Price" or "Price / Packet (₹)" column. Extract as number string (e.g., "195", "185", "190", "90", "80"). Remove ₹ symbol if present.
+10. SAMPLE QTY: Extract from "Sample Quantity" or "Sample Qty" column. Extract as number string (e.g., "0", "2", "1").
+11. SALE QTY: Extract from "Sales Quantity" or "Sale Qty" column. Extract as number string (e.g., "0", "3", "4", "6", "10", "100", "200").
+12. REPLACEMENT QTY: Extract from "Replacement Quantity" or "Replacement Qty" column into the rep field. Extract as number string (e.g., "0", "1", "10", "2").
+13. DELIVERY PERSON: Extract from "Delivery Person Name" or "Delivery Person" column. Common names: "AB", "TR", "JAB", "Nitin", "Pushpa".
+14. CASH AMOUNT (CRITICAL - INTEGER): Extract from "Cash Amount" column for EACH DATA ROW.
+    - This is usually column 8 or 9 in the table
+    - Look for the column header that says "Cash Amount" or "Cash Amoun t"
+    - Extract ONLY the numeric value from each cell (e.g., "500", "9000", "1600", "8000", "15000")
+    - Remove currency symbol ₹ if present
+    - Remove commas if present (e.g., "15,000" becomes "15000")
+    - Always extract as plain integer string
+    - If cell is empty, use "0"
+    - DO NOT confuse with "Balance Amount" - these are different columns
+15. FOLLOW-UPS DATE (CRITICAL): Extract from "Follow Up Date" or "Follow-ups Date" column for EACH DATA ROW.
+    - This is usually the LAST column (rightmost) in the table
+    - Look for the column header that says "Follow Up Date" or "Follow-ups Date"
+    - ACCEPT ANY DATE FORMAT: "25th Dec 2025", "28th Dec 2025", "25-12-2025", "25/12/2025", "2025-12-25", etc.
+    - ALWAYS RETURN in YYYY-MM-DD format (e.g., "2025-12-25", "2025-12-28", "2025-12-29")
+    - Examples of conversion:
+      * "25th Dec 2025" → "2025-12-25"
+      * "28th Dec 2025" → "2025-12-28"
+      * "25-12-2025" → "2025-12-25"
+      * "25/12/2025" → "2025-12-25"
     - If cell is empty, use empty string ""
-15. BALANCE AMOUNT (CRITICAL - COLUMN 9): Extract the ACTUAL NUMERIC VALUE from the "Balance Amount (₹)" column for EACH DATA ROW.
-    - IMPORTANT: The column HEADER is "Balance Amount (₹)" - DO NOT extract this header text
-    - Extract the NUMERIC VALUE inside each DATA CELL below the header row
-    - For Row 1: Look at the cell in Balance Amount column, Row 1 - extract the number like "0", "370", etc.
-    - For Row 2: Look at the cell in Balance Amount column, Row 2 - extract the number like "0", "370", etc.
-    - Continue for all rows
-    - Extract the numeric value from each cell:
-      * If cell shows "0" or "0.00", extract "0" (not "Balance Amount")
-      * If cell shows "370", extract "370" (not "Balance Amount")
-      * If cell shows "360", extract "360"
-      * If cell shows "600", extract "600"
-      * Extract ONLY the NUMBER from the cell, not the words "Balance" or "Amount"
-    - Remove currency symbol ₹ if present in the cell value
+    - This represents the date for any follow-up action needed
+16. BALANCE AMOUNT: Extract from "Balance Amount" or "Balance Amou nt" column for EACH DATA ROW.
+    - This is different from Cash Amount - make sure to extract from the correct column
+    - Extract the NUMERIC VALUE (e.g., "400", "0", "1000")
+    - Remove currency symbol ₹ if present
     - Remove commas if present (e.g., "1,000" becomes "1000")
-    - Always extract as plain number string (e.g., "0", "370", "360", "600")
-    - Example: If header says "Balance Amount (₹)" and Row 1 cell shows "0", extract "0" (not "Balance Amount")
-    - If cell is empty but Payment Status is "Paid", use "0"
-    - If cell is empty but Payment Status is "Balance", try to infer from context or use empty string ""
-16. CRITICAL ROW-BY-ROW EXTRACTION: For EVERY data row, extract paymentStatus and balanceAmount from that row's cells:
-    - Row 1: paymentStatus = value from Payment Status column, Row 1 cell (e.g., "Paid")
-             balanceAmount = value from Balance Amount column, Row 1 cell (e.g., "0")
-    - Row 2: paymentStatus = value from Payment Status column, Row 2 cell (e.g., "Balance")
-             balanceAmount = value from Balance Amount column, Row 2 cell (e.g., "370")
-    - Continue for all rows - match each row's values correctly
+    - Always extract as plain number string (e.g., "0", "370", "400", "1000")
+    - If cell is empty, use "0"
+17. CRITICAL ROW-BY-ROW EXTRACTION: For EVERY data row, carefully extract from the CORRECT columns:
+    - Identify the column positions: typically Per Packet Price | Sample Qty | Replacement Qty | Sales Qty | Cash Amount | Balance Amount | Delivery Person | Follow Up Date
+    - Row 1: cashAmount = value from Cash Amount column (e.g., "500"), followUpsDate = value from Follow Up Date column in YYYY-MM-DD format (e.g., "25th Dec 2025" → "2025-12-25"), balanceAmount = value from Balance Amount column (e.g., "400")
+    - Row 2: cashAmount = "9000", followUpsDate = "2025-12-28", balanceAmount = "0"
+    - Continue for all rows - DO NOT mix up the columns
     - NEVER use the column header text - always use the cell value from that specific row
-17. Ensure all JSON strings are properly escaped. Use double quotes for all JSON keys and string values.
-18. Return valid JSON only - check that all brackets and braces are properly closed.
-19. FINAL REMINDER: Column headers are "Payment Status" and "Balance Amount (₹)" - these are LABELS. 
-    Extract the VALUES from the cells below these headers, not the header text itself.
-    If you see "Payment Status" as a header and "Paid" in a cell below it, extract "Paid" for that row.
-    If you see "Balance Amount (₹)" as a header and "370" in a cell below it, extract "370" for that row.
+    - REMEMBER: Always convert followUpsDate to YYYY-MM-DD format regardless of input format
+18. Ensure all JSON strings are properly escaped. Use double quotes for all JSON keys and string values.
+19. Return valid JSON only - check that all brackets and braces are properly closed.
 `;
 
     const requestBody = {

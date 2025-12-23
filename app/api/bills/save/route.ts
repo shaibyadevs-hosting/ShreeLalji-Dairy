@@ -6,6 +6,8 @@ import {
   saveDailyBills,
   updateOrInsertCustomer,
   updateDeliverySummary,
+  ensureCallFollowUpsSheet,
+  saveCallFollowUp,
 } from "@/lib/googleSheets";
 import { DailyBillsInput } from "@/lib/types";
 
@@ -88,7 +90,8 @@ function toDDMMYYYY(isoDate: string): string {
         address: item.address || "",
         rep: typeof item.rep === "number" ? item.rep : parseFloat(item.rep) || 0,
         delPerson: item.delPerson || "",
-        paymentStatus: item.paymentStatus || "",
+        cashAmount: typeof item.cashAmount === "number" ? item.cashAmount : parseInt(item.cashAmount) || 0,
+        followUpsDate: item.followUpsDate || "",
         balanceAmount: item.balanceAmount || "",
       })),
     };
@@ -123,13 +126,56 @@ function toDDMMYYYY(isoDate: string): string {
     // Update Delivery Person Summary
     await updateDeliverySummary(dailyBillsData.items);
 
+    // Save follow-ups to CallFollowUps sheet for items with followUpsDate
+    let followUpsSaved = 0;
+    let followUpsDuplicates = 0;
+    
+    try {
+      await ensureCallFollowUpsSheet();
+      
+      for (const item of dailyBillsData.items) {
+        // Only save if followUpsDate is provided and not empty
+        if (item.followUpsDate && item.followUpsDate.trim() !== "") {
+          // Convert date from YYYY-MM-DD to DD-MM-YYYY format for storage
+          let formattedDate = item.followUpsDate;
+          if (item.followUpsDate.includes("-") && item.followUpsDate.split("-")[0].length === 4) {
+            // YYYY-MM-DD format, convert to DD-MM-YYYY
+            formattedDate = toDDMMYYYY(item.followUpsDate);
+          }
+          
+          const result = await saveCallFollowUp({
+            name: item.shopName || "Unknown",
+            phone: item.phone || "",
+            callDate: formattedDate,
+            callTime: "10:00 AM", // Default time for follow-ups from bills
+            notes: `Balance: ₹${item.balanceAmount || "0"} | From Daily Bills (${dailyBillsData.top.date})`,
+          });
+          
+          if (result.saved) {
+            followUpsSaved++;
+          } else if (result.duplicate) {
+            followUpsDuplicates++;
+          }
+        }
+      }
+      
+      console.log(`[SaveDailyBills] Follow-ups: ${followUpsSaved} saved, ${followUpsDuplicates} duplicates skipped`);
+    } catch (followUpError: any) {
+      console.error("[SaveDailyBills] Error saving follow-ups (non-fatal):", followUpError);
+      // Don't fail the whole request if follow-ups fail
+    }
+
     const displayDate = toDDMMYYYY(dailyBillsData.top.date);
 const sheetName = `${displayDate}-${dailyBillsData.top.shift}`;
 
     return NextResponse.json({
       success: true,
-  message: `Successfully saved ${dailyBillsData.items.length} bill(s) to sheet: ${sheetName}`,
+  message: `Successfully saved ${dailyBillsData.items.length} bill(s) to sheet: ${sheetName}${followUpsSaved > 0 ? ` | ${followUpsSaved} follow-up(s) scheduled` : ""}`,
   sheetName,
+  followUps: {
+    saved: followUpsSaved,
+    duplicates: followUpsDuplicates,
+  },
     });
 
   } catch (error: any) {

@@ -69,6 +69,8 @@ type TodayFollowUp = {
   name: string;
   phone: string;
   callTime: string;
+  callDate: string;
+  notes?: string;
 };
 
 type DeliveryPersonSummary = {
@@ -149,6 +151,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
   const [repeatVsNew, setRepeatVsNew] = useState<RepeatVsNew>({ repeat: 0, new: 0, total: 0 });
   const [avgOrderTrend, setAvgOrderTrend] = useState<AvgOrderTrend[]>([]);
   const [todayFollowUps, setTodayFollowUps] = useState<TodayFollowUp[]>([]);
+  const [markingCallId, setMarkingCallId] = useState<string | null>(null);
   const [deliverySummary, setDeliverySummary] = useState<DeliverySummaryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1436,10 +1439,50 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   </span>
                 </div>
                 <div className="flex gap-2">
-                  <button className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm">
-                    Mark as Called
+                  <button 
+                    onClick={async () => {
+                      try {
+                        setMarkingCallId(`${call.phone}-${call.callDate}`);
+                        const response = await fetch("/api/followups/status", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            phone: call.phone,
+                            callDate: call.callDate,
+                          }),
+                        });
+                        
+                        if (response.ok) {
+                          // Remove from the list
+                          setTodayFollowUps(prev => prev.filter(c => 
+                            !(c.phone === call.phone && c.callDate === call.callDate)
+                          ));
+                        } else {
+                          const error = await response.json();
+                          alert("Failed to mark as called: " + (error.error || "Unknown error"));
+                        }
+                      } catch (err: any) {
+                        console.error("Error marking call:", err);
+                        alert("Error: " + (err.message || "Unknown error"));
+                      } finally {
+                        setMarkingCallId(null);
+                      }
+                    }}
+                    disabled={markingCallId === `${call.phone}-${call.callDate}`}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {markingCallId === `${call.phone}-${call.callDate}` ? "Marking..." : "Mark as Called"}
                   </button>
-                  <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm">
+                  <button 
+                    onClick={() => {
+                      const newDate = prompt("Enter new date (DD-MM-YYYY):", call.callDate);
+                      if (newDate && newDate !== call.callDate) {
+                        // For now, just show an alert - can implement reschedule API later
+                        alert("Reschedule feature coming soon. Please use the Follow-ups page to reschedule.");
+                      }
+                    }}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
+                  >
                     Reschedule
                   </button>
           </div>

@@ -22,7 +22,8 @@ type SheetRow = {
   delPerson?: string;
   phonenumber?: string;
   packetPrice?: string; // Packet Price per row
-  paymentStatus?: string; // Payment Status
+  cashAmount?: string; // Cash Amount (integer)
+  followUpsDate?: string; // Follow-ups Date
   balanceAmount?: string; // Balance Amount
   // Calculated amounts (read-only)
   saleAmount?: number;
@@ -143,7 +144,8 @@ export default function RightPanel() {
             delPerson: String(it.delPerson ?? ""),
             phonenumber: String(it.phonenumber ?? ""),
             packetPrice: String(it.packetPrice ?? ""),
-            paymentStatus: String(it.paymentStatus ?? ""),
+            cashAmount: String(it.cashAmount ?? ""),
+            followUpsDate: String(it.followUpsDate ?? ""),
             balanceAmount: String(it.balanceAmount ?? ""),
               saleAmount: saleQty * packetPrice,
               sampleAmount: sampleQty * packetPrice,
@@ -181,7 +183,8 @@ export default function RightPanel() {
         delPerson: "",
         phonenumber: "",
         packetPrice: "",
-        paymentStatus: "",
+        cashAmount: "",
+        followUpsDate: "",
         balanceAmount: "",
         saleAmount: 0,
         sampleAmount: 0,
@@ -264,6 +267,7 @@ export default function RightPanel() {
           const saleQty = parseFloat(String(row.sale || "0")) || 0;
           const sampleQty = parseFloat(String(row.samp || "0")) || 0;
           const returnQty = parseFloat(String(row.rep || "0")) || 0;
+          const cashAmount = parseInt(String(row.cashAmount || "0")) || 0;
           
           return {
             shopName: row.shopName || "",
@@ -276,9 +280,10 @@ export default function RightPanel() {
             sampleAmount: sampleQty * packetPrice,
             returnAmount: returnQty * packetPrice,
             address: row.address || "",
-            rep: row.rep ? parseFloat(String(row.rep)) : 0, // Keep for backward compatibility
+            rep: returnQty, // Use returnQty for backward compatibility
             delPerson: row.delPerson || "",
-            paymentStatus: row.paymentStatus || "",
+            cashAmount: cashAmount,
+            followUpsDate: row.followUpsDate || "",
             balanceAmount: row.balanceAmount || "",
           };
         });
@@ -397,6 +402,12 @@ export default function RightPanel() {
     (sum, row) => sum + (parseFloat(row.balanceAmount || "0") || 0),
     0
   );
+  const totalCashAmount = rows.reduce(
+    (sum, row) => sum + (parseFloat(row.cashAmount || "0") || 0),
+    0
+  );
+  const totalExpenses = totalSampleAmount + totalReturnAmount;
+  const totalProfit = totalCashAmount - totalExpenses;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-gradient-to-b from-gray-50 to-white">
@@ -556,11 +567,14 @@ export default function RightPanel() {
                     <th className="py-3 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{ minWidth: "220px" }}>
                       Financials
                     </th>
-                    <th className="py-3 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{ minWidth: "140px" }}>
-                      Payment Status
+                    <th className="py-3 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{ minWidth: "120px" }}>
+                      Cash Amount
                     </th>
                     <th className="py-3 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{ minWidth: "140px" }}>
                       Balance Amount
+                    </th>
+                    <th className="py-3 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{ minWidth: "140px" }}>
+                      Follow-ups Date
                     </th>
                     <th className="py-3 px-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{ minWidth: "180px" }}>
                       Delivery & Contact
@@ -679,7 +693,7 @@ export default function RightPanel() {
                           <div className="grid grid-cols-3 gap-2">
                             <div>
                               <div className="text-xs text-gray-500 mb-1">
-                                Sale Amount (₹)
+                                Total Amount (₹)
                               </div>
                               <input
                                 value={row.saleAmount?.toFixed(2) ?? "0.00"}
@@ -711,15 +725,18 @@ export default function RightPanel() {
                         </div>
                 </td>
 
-                      <td className="py-4 px-3 min-w-[140px]">
+                      <td className="py-4 px-3 min-w-[120px]">
                         <div>
                           <input
-                            value={row.paymentStatus ?? ""}
+                            type="number"
+                            value={row.cashAmount ?? ""}
                             onChange={(e) =>
-                              updateRow(idx, "paymentStatus", e.target.value)
+                              updateRow(idx, "cashAmount", e.target.value)
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
-                            placeholder="Payment Status"
+                            placeholder="Cash Amount (₹)"
+                            min="0"
+                            step="1"
                           />
                         </div>
                 </td>
@@ -734,6 +751,20 @@ export default function RightPanel() {
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                             placeholder="Balance Amount (₹)"
+                          />
+                        </div>
+                </td>
+
+                      <td className="py-4 px-3 min-w-[140px]">
+                        <div>
+                          <input
+                            type="date"
+                            value={row.followUpsDate ?? ""}
+                            onChange={(e) =>
+                              updateRow(idx, "followUpsDate", e.target.value)
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                            placeholder="Follow-ups Date"
                           />
                         </div>
                 </td>
@@ -797,7 +828,7 @@ export default function RightPanel() {
                   </span>
                 </div>
                 <div className="text-sm">
-                  <span className="text-gray-600">💰 Sale Amount:</span>
+                  <span className="text-gray-600">💰 Total Amount:</span>
                   <span className="font-semibold text-green-600 ml-2">
                     ₹{totalSaleAmount.toFixed(2)}
                   </span>
@@ -824,6 +855,24 @@ export default function RightPanel() {
                   <span className="text-gray-600">💳 Total Balance:</span>
                   <span className="font-semibold text-amber-600 ml-2">
                     ₹{totalBalanceAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-sm border-l-2 border-blue-300 pl-4">
+                  <span className="text-gray-600">💵 Total Cash:</span>
+                  <span className="font-semibold text-blue-700 ml-2">
+                    ₹{totalCashAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-600">📉 Total Expenses:</span>
+                  <span className="font-semibold text-orange-700 ml-2">
+                    ₹{totalExpenses.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-sm border-l-2 border-green-300 pl-4">
+                  <span className="text-gray-600">✨ Total Profit:</span>
+                  <span className="font-semibold text-green-700 ml-2">
+                    ₹{totalProfit.toFixed(2)}
                   </span>
                 </div>
                 <button

@@ -538,20 +538,21 @@ export async function createDailySheet(sheetName: string): Promise<void> {
       "Sale Qty",
       "Sample Qty",
       "Return Qty",
-      "Sale Amount",
+      "Total Amount",
       "Sample Amount",
       "Return Amount",
       "Shift",
       "Address",
       "Rep",
       "Delivery Person",
-      "Payment Status",
+      "Cash Amount",
+      "Follow-ups Date",
       "Balance Amount",
     ];
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:P1`,
+      range: `${sheetName}!A1:Q1`,
       valueInputOption: "RAW",
       requestBody: {
         values: [headers],
@@ -585,7 +586,8 @@ export async function appendDailyRows(
     address: string;
     rep: number;
     delPerson: string;
-    paymentStatus?: string;
+    cashAmount?: number;
+    followUpsDate?: string;
     balanceAmount?: string;
   }>
 ): Promise<void> {
@@ -607,13 +609,14 @@ export async function appendDailyRows(
       item.address,
       item.rep.toString(),
       item.delPerson,
-      item.paymentStatus || "",
+      item.cashAmount?.toString() || "0",
+      item.followUpsDate || "",
       item.balanceAmount || "",
     ]);
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:P`,
+      range: `${sheetName}!A:Q`,
       valueInputOption: "RAW",
       requestBody: {
         values: rows,

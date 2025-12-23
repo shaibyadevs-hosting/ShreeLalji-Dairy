@@ -74,7 +74,8 @@ export interface DailyBillItem {
   address: string;
   rep: number;
   delPerson: string;
-  paymentStatus?: string;
+  cashAmount?: number;
+  followUpsDate?: string;
   balanceAmount?: string;
   // Legacy fields for backward compatibility
   sale?: number;
