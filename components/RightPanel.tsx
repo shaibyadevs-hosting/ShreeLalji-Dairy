@@ -83,6 +83,7 @@ export default function RightPanel() {
       if (!imageData) {
         console.error("❌ No image data in event detail:", e);
         alert("No image data received.");
+        window.dispatchEvent(new CustomEvent("ocr-complete", { detail: { success: false } }));
         return;
       }
 
@@ -108,6 +109,7 @@ export default function RightPanel() {
             data?.error || data?.details || "Unknown error occurred";
           alert("OCR failed: " + errorMessage);
           setIsLoading(false);
+          window.dispatchEvent(new CustomEvent("ocr-complete", { detail: { success: false } }));
           return;
         }
 
@@ -156,9 +158,15 @@ export default function RightPanel() {
 
         setRows(normalizedRows);
         console.log("✅ Data populated successfully");
+        
+        // Notify ImageViewer that processing is complete
+        window.dispatchEvent(new CustomEvent("ocr-complete", { detail: { success: true } }));
       } catch (err: any) {
         console.error("❌ OCR request failed:", err);
         alert("OCR request failed: " + (err?.message ?? "unknown"));
+        
+        // Notify ImageViewer that processing failed
+        window.dispatchEvent(new CustomEvent("ocr-complete", { detail: { success: false } }));
       } finally {
         setIsLoading(false);
       }

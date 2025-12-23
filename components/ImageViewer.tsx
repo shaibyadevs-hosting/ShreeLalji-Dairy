@@ -154,8 +154,61 @@ export default function ImageViewer({
     return () => viewport.removeEventListener("wheel", onWheel as any);
   }, [scale]);
 
+  // Listen for OCR completion to stop the processing state
+  React.useEffect(() => {
+    const handleOcrComplete = () => {
+      setIsProcessing(false);
+    };
+    window.addEventListener("ocr-complete", handleOcrComplete);
+    return () => window.removeEventListener("ocr-complete", handleOcrComplete);
+  }, []);
+
   return (
     <aside className="left-panel fixed-viewport">
+      {/* Processing Overlay */}
+      {isProcessing && (
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.7)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000,
+          borderRadius: "12px"
+        }}>
+          <div style={{
+            width: "50px",
+            height: "50px",
+            border: "4px solid rgba(255, 255, 255, 0.3)",
+            borderTopColor: "#3b82f6",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite"
+          }} />
+          <p style={{
+            color: "#fff",
+            marginTop: "16px",
+            fontSize: "16px",
+            fontWeight: 500
+          }}>Extracting data from image...</p>
+          <p style={{
+            color: "rgba(255, 255, 255, 0.7)",
+            marginTop: "8px",
+            fontSize: "13px"
+          }}>This may take a few seconds</p>
+        </div>
+      )}
+      
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+      
       <div className="viewer-header">
         <div className="title">Image Viewer</div>
         <div className="controls">
@@ -208,9 +261,29 @@ export default function ImageViewer({
             className="primary"
             onClick={processImage}
             disabled={images.length === 0 || isProcessing}
-            style={{ fontSize: "12px", padding: "6px 10px" }}
+            style={{ 
+              fontSize: "12px", 
+              padding: "6px 10px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              minWidth: "80px",
+              justifyContent: "center"
+            }}
           >
-            {isProcessing ? "..." : "Process"}
+            {isProcessing ? (
+              <>
+                <span style={{
+                  width: "12px",
+                  height: "12px",
+                  border: "2px solid #fff",
+                  borderTopColor: "transparent",
+                  borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite"
+                }} />
+                Processing...
+              </>
+            ) : "Process"}
           </button>
           <button className="danger" onClick={clearAll} style={{ fontSize: "12px", padding: "6px 10px" }}>
             Clear
