@@ -76,6 +76,12 @@ function toDDMMYYYY(isoDate: string): string {
       top: {
         date: body.top.date,
         shift: body.top.shift,
+        // Expense fields (manual input from form)
+        rawMaterialExpense: typeof body.top.rawMaterialExpense === "number" ? body.top.rawMaterialExpense : parseFloat(body.top.rawMaterialExpense) || 0,
+        electricityExpense: typeof body.top.electricityExpense === "number" ? body.top.electricityExpense : parseFloat(body.top.electricityExpense) || 0,
+        laborCharges: typeof body.top.laborCharges === "number" ? body.top.laborCharges : parseFloat(body.top.laborCharges) || 0,
+        godownRent: typeof body.top.godownRent === "number" ? body.top.godownRent : parseFloat(body.top.godownRent) || 0,
+        petrolFuelCharges: typeof body.top.petrolFuelCharges === "number" ? body.top.petrolFuelCharges : parseFloat(body.top.petrolFuelCharges) || 0,
       },
       items: body.items.map((item: any) => ({
         shopName: item.shopName || "",

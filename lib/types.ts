@@ -59,6 +59,12 @@ export interface DailyBillTop {
   date: string;
   shift: string;
   packetPrice?: number;
+  // Expense fields (manual input, one-time at top level)
+  rawMaterialExpense?: number;
+  electricityExpense?: number;
+  laborCharges?: number;
+  godownRent?: number;
+  petrolFuelCharges?: number;
 }
 
 export interface DailyBillItem {

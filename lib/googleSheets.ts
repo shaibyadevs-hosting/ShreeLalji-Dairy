@@ -529,7 +529,7 @@ export async function createDailySheet(sheetName: string): Promise<void> {
       },
     });
 
-    // Add headers
+    // Add headers (including expense columns R-V)
     const headers = [
       "Date",
       "Shop Name",
@@ -548,11 +548,19 @@ export async function createDailySheet(sheetName: string): Promise<void> {
       "Cash Amount",
       "Follow-ups Date",
       "Balance Amount",
+      // New expense columns (one-time values, stored in first row)
+      "Raw Material Expense",
+      "Electricity Expense",
+      "Labor Charges",
+      "Godown Rent",
+      "Petrol/Fuel Charges",
+      "Total Expenses",
+      "Net Revenue",
     ];
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:Q1`,
+      range: `${sheetName}!A1:X1`,
       valueInputOption: "RAW",
       requestBody: {
         values: [headers],
@@ -589,34 +597,80 @@ export async function appendDailyRows(
     cashAmount?: number;
     followUpsDate?: string;
     balanceAmount?: string;
-  }>
+  }>,
+  expenses?: {
+    rawMaterialExpense?: number;
+    electricityExpense?: number;
+    laborCharges?: number;
+    godownRent?: number;
+    petrolFuelCharges?: number;
+  }
 ): Promise<void> {
   try {
     const sheets = getSheetsClient();
+    
+    // Calculate totals for summary
+    const totalSaleAmount = items.reduce((sum, item) => sum + item.saleAmount, 0);
+    const totalSampleAmount = items.reduce((sum, item) => sum + item.sampleAmount, 0);
+    const totalReturnAmount = items.reduce((sum, item) => sum + item.returnAmount, 0);
+    
+    // Parse expense values
+    const rawMaterialExpense = expenses?.rawMaterialExpense || 0;
+    const electricityExpense = expenses?.electricityExpense || 0;
+    const laborCharges = expenses?.laborCharges || 0;
+    const godownRent = expenses?.godownRent || 0;
+    const petrolFuelCharges = expenses?.petrolFuelCharges || 0;
+    
+    // Total_Expense = Sample_Amount + Return_Amount + Raw_Material + Electricity + Labor + Godown_Rent + Petrol_Fuel
+    const totalExpenses = totalSampleAmount + totalReturnAmount + rawMaterialExpense + electricityExpense + laborCharges + godownRent + petrolFuelCharges;
+    
+    // Net_Revenue = Total_Sales_Amount − Total_Expense
+    const netRevenue = totalSaleAmount - totalExpenses;
+    
     // Convert items to rows
-    const rows = items.map((item) => [
-      date,
-      item.shopName,
-      item.phone,
-      item.packetPrice.toString(),
-      item.saleQty.toString(),
-      item.sampleQty.toString(),
-      item.returnQty.toString(),
-      item.saleAmount.toString(),
-      item.sampleAmount.toString(),
-      item.returnAmount.toString(),
-      shift,
-      item.address,
-      item.rep.toString(),
-      item.delPerson,
-      item.cashAmount?.toString() || "0",
-      item.followUpsDate || "",
-      item.balanceAmount || "",
-    ]);
+    const rows = items.map((item, index) => {
+      const baseRow = [
+        date,
+        item.shopName,
+        item.phone,
+        item.packetPrice.toString(),
+        item.saleQty.toString(),
+        item.sampleQty.toString(),
+        item.returnQty.toString(),
+        item.saleAmount.toString(),
+        item.sampleAmount.toString(),
+        item.returnAmount.toString(),
+        shift,
+        item.address,
+        item.rep.toString(),
+        item.delPerson,
+        item.cashAmount?.toString() || "0",
+        item.followUpsDate || "",
+        item.balanceAmount || "",
+      ];
+      
+      // Add expense data only to the first row
+      if (index === 0) {
+        baseRow.push(
+          rawMaterialExpense.toString(),
+          electricityExpense.toString(),
+          laborCharges.toString(),
+          godownRent.toString(),
+          petrolFuelCharges.toString(),
+          totalExpenses.toString(),
+          netRevenue.toString()
+        );
+      } else {
+        // Empty values for other rows
+        baseRow.push("", "", "", "", "", "", "");
+      }
+      
+      return baseRow;
+    });
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:Q`,
+      range: `${sheetName}!A:X`,
       valueInputOption: "RAW",
       requestBody: {
         values: rows,
@@ -624,7 +678,7 @@ export async function appendDailyRows(
     });
 
     console.log(
-      `[DailyBills] ✅ Appended ${rows.length} row(s) to sheet: ${sheetName}`
+      `[DailyBills] ✅ Appended ${rows.length} row(s) to sheet: ${sheetName} with expenses`
     );
   } catch (error) {
     console.error(
@@ -671,8 +725,14 @@ const sheetName = `${displayDate}-${top.shift}`;
       await createDailySheet(sheetName);
     }
 
-    // Append rows
-    await appendDailyRows(sheetName, top.date, top.shift, items);
+    // Append rows with expense data
+    await appendDailyRows(sheetName, top.date, top.shift, items, {
+      rawMaterialExpense: top.rawMaterialExpense,
+      electricityExpense: top.electricityExpense,
+      laborCharges: top.laborCharges,
+      godownRent: top.godownRent,
+      petrolFuelCharges: top.petrolFuelCharges,
+    });
 
     console.log(
       `[DailyBills] ✅ Successfully saved ${items.length} bill(s) to ${sheetName}`

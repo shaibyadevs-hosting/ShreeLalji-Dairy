@@ -1,5 +1,9 @@
 /* app/globals.css */
 @import "tailwindcss";
+/* Hide number input spinners to save space */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
 html {
   scroll-behavior: smooth;
 }

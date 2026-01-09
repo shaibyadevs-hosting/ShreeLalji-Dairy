@@ -25,6 +25,49 @@ export default function ImageViewer({
   const last = useRef<{ x: number; y: number } | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
 
+  // Compress oversized base64 images to keep request small while preserving quality
+  async function compressIfNeeded(dataUrl: string): Promise<string> {
+    const prefixMatch = dataUrl.match(/^data:image\/[^;]+;base64,/);
+    const prefix = prefixMatch ? prefixMatch[0] : "";
+    const base64 = dataUrl.slice(prefix.length);
+    const bytes = Math.floor((base64.length * 3) / 4);
+    const MAX_BYTES = 1.2 * 1024 * 1024; // ~1.2 MB target
+
+    if (bytes <= MAX_BYTES) return dataUrl;
+
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = (err) => reject(err);
+      image.src = dataUrl;
+    });
+
+    const MAX_DIM = 1800;
+    const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+    const width = Math.max(1, Math.floor(img.width * scale));
+    const height = Math.max(1, Math.floor(img.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, width, height);
+
+    let quality = 0.82;
+    let compressed = canvas.toDataURL("image/jpeg", quality);
+    let compressedBytes = Math.floor(((compressed.length - (compressed.match(/^data:image\/[^;]+;base64,/)?.[0] || "").length) * 3) / 4);
+
+    while (compressedBytes > MAX_BYTES && quality > 0.55) {
+      quality = +(quality - 0.08).toFixed(2);
+      compressed = canvas.toDataURL("image/jpeg", quality);
+      compressedBytes = Math.floor(((compressed.length - (compressed.match(/^data:image\/[^;]+;base64,/)?.[0] || "").length) * 3) / 4);
+    }
+
+    console.log("🗜️ Compressed image from", bytes, "to", compressedBytes, "bytes at quality", quality);
+    return compressed;
+  }
+
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files) return;
@@ -122,29 +165,35 @@ export default function ImageViewer({
     }
     
     setIsProcessing(true);
-    
-    try {
-      const event = new CustomEvent("process-image", { 
-        detail: { imageData },
-        bubbles: true,
-        cancelable: true
-      });
-      
-      console.log("📤 Dispatching process-image event");
-      const dispatched = window.dispatchEvent(event);
-      console.log("📤 Event dispatched:", dispatched);
-      
-      if (!dispatched) {
-        console.warn("⚠️ Event was prevented");
+
+    const dispatchImage = async () => {
+      try {
+        const optimized = await compressIfNeeded(imageData);
+
+        const event = new CustomEvent("process-image", {
+          detail: { imageData: optimized },
+          bubbles: true,
+          cancelable: true,
+        });
+
+        console.log("📤 Dispatching process-image event (possibly compressed)");
+        const dispatched = window.dispatchEvent(event);
+        console.log("📤 Event dispatched:", dispatched);
+
+        if (!dispatched) {
+          console.warn("⚠️ Event was prevented");
+        }
+      } catch (error) {
+        console.error("❌ Error dispatching event:", error);
+        alert("Error processing image: " + (error as Error).message);
+        setIsProcessing(false);
+        return;
       }
-    } catch (error) {
-      console.error("❌ Error dispatching event:", error);
-      alert("Error processing image: " + (error as Error).message);
-      setIsProcessing(false);
-      return;
-    }
-    
-    setTimeout(() => setIsProcessing(false), 30000);
+
+      setTimeout(() => setIsProcessing(false), 30000);
+    };
+
+    dispatchImage();
   }
 
   React.useEffect(() => {

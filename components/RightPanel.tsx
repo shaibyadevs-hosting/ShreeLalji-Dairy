@@ -9,6 +9,12 @@ type TopHeader = {
   totalPkt: string;
   newPkt: string;
   shift: string;
+  // Expense fields (manual input)
+  rawMaterialExpense: string;
+  electricityExpense: string;
+  laborCharges: string;
+  godownRent: string;
+  petrolFuelCharges: string;
 };
 
 type SheetRow = {
@@ -37,6 +43,11 @@ const initialTop: TopHeader = {
   totalPkt: "",
   newPkt: "",
   shift: "Morning", // Default shift
+  rawMaterialExpense: "",
+  electricityExpense: "",
+  laborCharges: "",
+  godownRent: "",
+  petrolFuelCharges: "",
 };
 
 function normalizeDate(input?: string): string {
@@ -126,6 +137,12 @@ export default function RightPanel() {
           totalPkt: String(returnedTop.totalPkt ?? ""),
           newPkt: String(returnedTop.newPkt ?? ""),
           shift: String(returnedTop.shift ?? top.shift ?? "Morning"),
+          // Keep existing expense values (they are manual input, not from OCR)
+          rawMaterialExpense: top.rawMaterialExpense,
+          electricityExpense: top.electricityExpense,
+          laborCharges: top.laborCharges,
+          godownRent: top.godownRent,
+          petrolFuelCharges: top.petrolFuelCharges,
         });
 
         const normalizedRows: SheetRow[] = returnedItems.map(
@@ -309,6 +326,12 @@ export default function RightPanel() {
         top: {
           date: dateValue,
           shift: shiftValue,
+          // Include expense fields
+          rawMaterialExpense: parseFloat(top.rawMaterialExpense || "0") || 0,
+          electricityExpense: parseFloat(top.electricityExpense || "0") || 0,
+          laborCharges: parseFloat(top.laborCharges || "0") || 0,
+          godownRent: parseFloat(top.godownRent || "0") || 0,
+          petrolFuelCharges: parseFloat(top.petrolFuelCharges || "0") || 0,
         },
         items: items,
         };
@@ -414,7 +437,21 @@ export default function RightPanel() {
     (sum, row) => sum + (parseFloat(row.cashAmount || "0") || 0),
     0
   );
-  const totalExpenses = totalSampleAmount + totalReturnAmount;
+  
+  // Parse expense values from top header
+  const rawMaterialExpense = parseFloat(top.rawMaterialExpense || "0") || 0;
+  const electricityExpense = parseFloat(top.electricityExpense || "0") || 0;
+  const laborCharges = parseFloat(top.laborCharges || "0") || 0;
+  const godownRent = parseFloat(top.godownRent || "0") || 0;
+  const petrolFuelCharges = parseFloat(top.petrolFuelCharges || "0") || 0;
+  
+  // Total_Expense = Sample_Amount + Replacement_Amount (Return) + Raw_Material + Electricity + Labor + Godown_Rent + Petrol_Fuel
+  const totalExpenses = totalSampleAmount + totalReturnAmount + rawMaterialExpense + electricityExpense + laborCharges + godownRent + petrolFuelCharges;
+  
+  // Net_Revenue = Total_Sales_Amount − Total_Expense
+  const netRevenue = totalSaleAmount - totalExpenses;
+  
+  // Total Profit from cash collected
   const totalProfit = totalCashAmount - totalExpenses;
 
   return (
@@ -528,6 +565,72 @@ export default function RightPanel() {
             </select>
           </div>
           </div>
+
+        {/* Expense Fields Section */}
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">💰 Daily Expenses (Manual Input)</h4>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-500">🥛 Raw Material</label>
+              <input
+                type="number"
+                value={top.rawMaterialExpense}
+                onChange={(e) => setTop({ ...top, rawMaterialExpense: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                placeholder="₹0"
+                min="0"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-500">⚡ Electricity</label>
+              <input
+                type="number"
+                value={top.electricityExpense}
+                onChange={(e) => setTop({ ...top, electricityExpense: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                placeholder="₹0"
+                min="0"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-500">👷 Labor Charges</label>
+              <input
+                type="number"
+                value={top.laborCharges}
+                onChange={(e) => setTop({ ...top, laborCharges: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                placeholder="₹0"
+                min="0"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-500">🏠 Godown Rent</label>
+              <input
+                type="number"
+                value={top.godownRent}
+                onChange={(e) => setTop({ ...top, godownRent: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                placeholder="₹0"
+                min="0"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-gray-500">⛽ Petrol/Fuel</label>
+              <input
+                type="number"
+                value={top.petrolFuelCharges}
+                onChange={(e) => setTop({ ...top, petrolFuelCharges: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                placeholder="₹0"
+                min="0"
+              />
+            </div>
+          </div>
+        </div>
         </div>
 
       {/* Bills Table */}
@@ -836,50 +939,50 @@ export default function RightPanel() {
                   </span>
                 </div>
                 <div className="text-sm">
-                  <span className="text-gray-600">💰 Total Amount:</span>
+                  <span className="text-gray-600">💰 Total Sales:</span>
                   <span className="font-semibold text-green-600 ml-2">
                     ₹{totalSaleAmount.toFixed(2)}
                   </span>
                 </div>
                 <div className="text-sm">
-                  <span className="text-gray-600">🎁 Sample Amount:</span>
+                  <span className="text-gray-600">🎁 Sample:</span>
                   <span className="font-semibold text-orange-600 ml-2">
                     ₹{totalSampleAmount.toFixed(2)}
                   </span>
                 </div>
                 <div className="text-sm">
-                  <span className="text-gray-600">↩️ Return Amount:</span>
+                  <span className="text-gray-600">↩️ Return:</span>
                   <span className="font-semibold text-red-600 ml-2">
                     ₹{totalReturnAmount.toFixed(2)}
                   </span>
                 </div>
-                <div className="text-sm">
-                  <span className="text-gray-600">📊 Net Revenue:</span>
-                  <span className="font-semibold text-purple-600 ml-2">
-                    ₹{(totalSaleAmount - totalSampleAmount - totalReturnAmount).toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-gray-600">💳 Total Balance:</span>
-                  <span className="font-semibold text-amber-600 ml-2">
-                    ₹{totalBalanceAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm border-l-2 border-blue-300 pl-4">
-                  <span className="text-gray-600">💵 Total Cash:</span>
-                  <span className="font-semibold text-blue-700 ml-2">
-                    ₹{totalCashAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm">
+                <div className="text-sm border-l-2 border-orange-300 pl-4">
                   <span className="text-gray-600">📉 Total Expenses:</span>
                   <span className="font-semibold text-orange-700 ml-2">
                     ₹{totalExpenses.toFixed(2)}
                   </span>
                 </div>
+                <div className="text-sm border-l-2 border-purple-300 pl-4">
+                  <span className="text-gray-600">📊 Net Revenue:</span>
+                  <span className={`font-semibold ml-2 ${netRevenue >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+                    ₹{netRevenue.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-gray-600">💳 Balance:</span>
+                  <span className="font-semibold text-amber-600 ml-2">
+                    ₹{totalBalanceAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="text-sm border-l-2 border-blue-300 pl-4">
+                  <span className="text-gray-600">💵 Cash:</span>
+                  <span className="font-semibold text-blue-700 ml-2">
+                    ₹{totalCashAmount.toFixed(2)}
+                  </span>
+                </div>
                 <div className="text-sm border-l-2 border-green-300 pl-4">
-                  <span className="text-gray-600">✨ Total Profit:</span>
-                  <span className="font-semibold text-green-700 ml-2">
+                  <span className="text-gray-600">✨ Profit:</span>
+                  <span className={`font-semibold ml-2 ${totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                     ₹{totalProfit.toFixed(2)}
                   </span>
                 </div>

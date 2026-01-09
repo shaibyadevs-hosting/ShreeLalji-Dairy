@@ -214,87 +214,68 @@ export async function POST(req: NextRequest) {
     }
 
     const prompt = `
-You are an extractor for ShreeLalJI Dairy SalesTrack OCR. Analyze the handwritten/typed sales sheet image.
+You are an OCR field extractor for ShreeLalji Dairy daily sales sheet. Read the grid and output ONLY JSON matching the sheet structure below. Do not add markdown or explanations.
 
-TASK: Return ONLY valid JSON:
+CRITICAL ROW ISOLATION RULES (MUST FOLLOW):
+- Treat each horizontal row as a fully independent record.(very important)
+- NEVER copy, infer, or borrow values from the previous or next row.
+- If a value is not clearly present within the SAME row boundaries, return "" or "0" as applicable.
+- Do NOT assume repeated values (e.g., price, sale qty, delivery person) continue across rows.
+- Sale Qty, Sample Qty, and Rep Qty MUST come from the same visual row as the customer name.
+- If two adjacent rows have similar layouts, do NOT merge or shift numbers between them.
+
+Expected JSON:
 {
   "top": {
-    "date":"",
-    "balPkt":"",
-    "totalPkt":"",
-    "newPkt":"",
-    "shift":""
+    "date":"",      // top header date (as written)
+    "balPkt":"",    // BAL PKT from header
+    "totalPkt":"",  // TOTAL PKT from header
+    "newPkt":"",    // NEW PKT from header
+    "shift":""      // header shift text (if missing, "")
   },
   "items": [
     {
-      "no":"",
-      "shopName":"",
-      "address":"",
-      "samp":"",
-      "rep":"",
-      "sale":"",
-      "cash":"",
-      "delPerson":"",
-      "phonenumber":"",
-      "packetPrice":"",
-      "cashAmount":"",
-      "followUpsDate":"",
-      "balanceAmount":""
+      "no":"",            // row serial no
+      "shopName":"",      // customer name
+      "address":"",       // address/area
+      "samp":"",          // Sample Qty
+      "rep":"",           // Replacement Qty
+      "sale":"",          // Sale Qty
+      "cash":"",          // (legacy) keep "" if not present
+      "delPerson":"",     // Delivery Person
+      "phonenumber":"",   // phone/mobile
+      "packetPrice":"",   // price per packet
+      "cashAmount":"",    // Cash Amount
+      "followUpsDate":"", // Follow Up Date (YYYY-MM-DD if parsed, else empty)
+      "balanceAmount":""  // Balance Amount or BAL AMT
     }
   ]
 }
 
-IMPORTANT EXTRACTION RULES:
-1. Return ONLY valid JSON, no explanation, no markdown, no code blocks
-2. Preserve sheet order exactly as shown
-3. Empty string "" for unknown or missing fields
-4. No extra metadata or comments in JSON
-5. DATE: Extract the date from the top header section. Accept ANY date format (e.g., 17/09/2025, 17-09-25, 17-09-2025, 17/09/25, etc.). Return exactly as written.
-6. PHONE NUMBER: Extract from "Mobile no" or "Mobile Number" column. Include all 10 digits. If missing, use empty string "".
-7. SHOP NAME: Extract from "Customer Name" or "Shop / Customer Name" column.
-8. ADDRESS/AREA: Extract from "Address" or "Area" column into the address field.
-9. PACKET PRICE: Extract from "Per Packet Price" or "Price / Packet (₹)" column. Extract as number string (e.g., "195", "185", "190", "90", "80"). Remove ₹ symbol if present.
-10. SAMPLE QTY: Extract from "Sample Quantity" or "Sample Qty" column. Extract as number string (e.g., "0", "2", "1").
-11. SALE QTY: Extract from "Sales Quantity" or "Sale Qty" column. Extract as number string (e.g., "0", "3", "4", "6", "10", "100", "200").
-12. REPLACEMENT QTY: Extract from "Replacement Quantity" or "Replacement Qty" column into the rep field. Extract as number string (e.g., "0", "1", "10", "2").
-13. DELIVERY PERSON: Extract from "Delivery Person Name" or "Delivery Person" column. Common names: "AB", "TR", "JAB", "Nitin", "Pushpa".
-14. CASH AMOUNT (CRITICAL - INTEGER): Extract from "Cash Amount" column for EACH DATA ROW.
-    - This is usually column 8 or 9 in the table
-    - Look for the column header that says "Cash Amount" or "Cash Amoun t"
-    - Extract ONLY the numeric value from each cell (e.g., "500", "9000", "1600", "8000", "15000")
-    - Remove currency symbol ₹ if present
-    - Remove commas if present (e.g., "15,000" becomes "15000")
-    - Always extract as plain integer string
-    - If cell is empty, use "0"
-    - DO NOT confuse with "Balance Amount" - these are different columns
-15. FOLLOW-UPS DATE (CRITICAL): Extract from "Follow Up Date" or "Follow-ups Date" column for EACH DATA ROW.
-    - This is usually the LAST column (rightmost) in the table
-    - Look for the column header that says "Follow Up Date" or "Follow-ups Date"
-    - ACCEPT ANY DATE FORMAT: "25th Dec 2025", "28th Dec 2025", "25-12-2025", "25/12/2025", "2025-12-25", etc.
-    - ALWAYS RETURN in YYYY-MM-DD format (e.g., "2025-12-25", "2025-12-28", "2025-12-29")
-    - Examples of conversion:
-      * "25th Dec 2025" → "2025-12-25"
-      * "28th Dec 2025" → "2025-12-28"
-      * "25-12-2025" → "2025-12-25"
-      * "25/12/2025" → "2025-12-25"
-    - If cell is empty, use empty string ""
-    - This represents the date for any follow-up action needed
-16. BALANCE AMOUNT: Extract from "Balance Amount" or "Balance Amou nt" column for EACH DATA ROW.
-    - This is different from Cash Amount - make sure to extract from the correct column
-    - Extract the NUMERIC VALUE (e.g., "400", "0", "1000")
-    - Remove currency symbol ₹ if present
-    - Remove commas if present (e.g., "1,000" becomes "1000")
-    - Always extract as plain number string (e.g., "0", "370", "400", "1000")
-    - If cell is empty, use "0"
-17. CRITICAL ROW-BY-ROW EXTRACTION: For EVERY data row, carefully extract from the CORRECT columns:
-    - Identify the column positions: typically Per Packet Price | Sample Qty | Replacement Qty | Sales Qty | Cash Amount | Balance Amount | Delivery Person | Follow Up Date
-    - Row 1: cashAmount = value from Cash Amount column (e.g., "500"), followUpsDate = value from Follow Up Date column in YYYY-MM-DD format (e.g., "25th Dec 2025" → "2025-12-25"), balanceAmount = value from Balance Amount column (e.g., "400")
-    - Row 2: cashAmount = "9000", followUpsDate = "2025-12-28", balanceAmount = "0"
-    - Continue for all rows - DO NOT mix up the columns
-    - NEVER use the column header text - always use the cell value from that specific row
-    - REMEMBER: Always convert followUpsDate to YYYY-MM-DD format regardless of input format
-18. Ensure all JSON strings are properly escaped. Use double quotes for all JSON keys and string values.
-19. Return valid JSON only - check that all brackets and braces are properly closed.
+Sheet column order (left to right):
+1 sr | 2 customer name | 3 address | 4 price (packet price) | 5 sample qty | 6 rep qty | 7 sale qty | 8 cash amt | 9 bal amt | 10 delivery person | 11 follow up date. Use this order to map values.
+
+Top header fields:
+- date: read from top header line (e.g., "DATE 01-01-26"). Return exactly as written.
+- balPkt: from "BAL PKT" header.
+- newPkt: from "NEW PKT" header.
+- totalPkt: from "TOTAL PKT" header.
+- shift: if a shift label exists, return it; otherwise "".
+
+Field rules:
+- Always output valid JSON only. No markdown, no comments.
+- Use empty string "" when a cell is blank or unreadable.
+- Remove currency symbols and commas; keep plain numbers as strings.
+- packetPrice, samp, rep, sale, cashAmount, balanceAmount: numeric strings ("0" if blank).
+- phonenumber: numeric string; if absent, "".
+- followUpsDate: if a date is present, convert to YYYY-MM-DD; if unclear, return "".
+
+Row extraction discipline:
+- Respect the grid columns; do not mix Cash Amount with Balance Amount.
+- Use the visible serial number as "no"; keep row order.
+- Only include rows that have a customer name.
+
+Return JSON only.
 `;
 
     const requestBody = {
