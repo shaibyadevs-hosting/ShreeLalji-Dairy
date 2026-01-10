@@ -15,10 +15,10 @@ html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,"Segoe 
 body{background:var(--bg);color:#111}
 
 /* two-panel root */
-.two-panel-root { display:grid; grid-template-columns:280px 1fr; gap:12px; padding:12px; height:100vh; }
+.two-panel-root { display:grid; grid-template-columns:280px 1fr; gap:12px; padding:12px; height:100vh; align-items:start; }
 
 /* left panel */
-.left-panel.fixed-viewport { background:var(--panel); border-radius:8px; padding:10px; display:grid; grid-template-rows: auto 1fr auto; gap:8px; box-shadow: 0 6px 18px rgba(15,23,42,0.06); height:100%; }
+.left-panel.fixed-viewport { background:var(--panel); border-radius:8px; padding:10px; display:grid; grid-template-rows: auto 1fr auto; gap:8px; box-shadow: 0 6px 18px rgba(15,23,42,0.06); height:calc(100vh - 24px); position:sticky; top:12px; }
 .viewer-header { display:flex; justify-content:space-between; align-items:center; }
 .viewport { width:100%; height:100%; border-radius:8px; border:2px dashed var(--border); background:#fff; overflow:hidden; display:flex; align-items:center; justify-content:center; }
 .viewport-img { max-width:200%; max-height:200%; user-select:none; transition: transform 80ms linear; }

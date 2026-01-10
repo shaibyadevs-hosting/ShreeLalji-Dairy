@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * OCR API route -> calls Google Gemini (gemini-2.5-flash) generateContent
+ * OCR API route -> calls Google Gemini (gemini-3-flash-preview) generateContent
  * - If client doesn't send image_url, uses local fallback path (from conversation)
  *
  * IMPORTANT:
@@ -25,7 +25,7 @@ if (API_KEY) {
   );
 }
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3-flash-preview";
 
 if (!API_KEY) {
   console.error("[OCR] ❌ GEMINI_API_KEY is not set in environment variables");
@@ -213,71 +213,70 @@ export async function POST(req: NextRequest) {
       console.log("[OCR] Extracted base64 from data URL");
     }
 
-    const prompt = `
-You are an OCR field extractor for ShreeLalji Dairy daily sales sheet. Read the grid and output ONLY JSON matching the sheet structure below. Do not add markdown or explanations.
+ const prompt = `
+You are a high-precision OCR engine tasked with digitizing a handwritten dairy sales log. 
+**Your priority is 100% accuracy over speed. Analyze the image slowly and deeply.**
 
-CRITICAL ROW ISOLATION RULES (MUST FOLLOW):
-- Treat each horizontal row as a fully independent record.(very important)
-- NEVER copy, infer, or borrow values from the previous or next row.
-- If a value is not clearly present within the SAME row boundaries, return "" or "0" as applicable.
-- Do NOT assume repeated values (e.g., price, sale qty, delivery person) continue across rows.
-- Sale Qty, Sample Qty, and Rep Qty MUST come from the same visual row as the customer name.
-- If two adjacent rows have similar layouts, do NOT merge or shift numbers between them.
+### THE CRITICAL CHALLENGE:
+The sheet has **three narrow columns** side-by-side that are easily confused. You must separate them strictly:
+1.  **SMP (Sample)**: Left narrow column.
+2.  **REP (Return)**: Middle narrow column (OFTEN BLANK).
+3.  **SALE (Sale)**: Right narrow column (Usually filled).
 
-Expected JSON:
+**COMMON ERROR TO AVOID:** - Do NOT see a number in "SALE" (Column 7) and accidentally put it in "REP" (Column 6).
+- If "REP" is empty, output "0". Do NOT duplicate the Sale number into the Return column.
+- **Example Fix:** For Row 1 ("Morning SDF"), the image shows: SMP=4, REP=Blank, SALE=1. 
+  - *Wrong Extraction:* Sale:1, Sample:4, Return:1 (Incorrectly copied Sale to Return).
+  - *Correct Extraction:* Sale:1, Sample:4, Return:0.
+
+### STRICT COLUMN MAPPING (Left to Right):
+Visualise vertical lines separating these columns. Do not cross them.
+1.  **sr**: Serial No.
+2.  **customer name**: Name.
+3.  **ADDRESS**: Area.
+4.  **price**: (e.g., 65).
+5.  **SMP**: **Column 5**. Look immediately to the right of "price".
+6.  **REP**: **Column 6**. Look between "SMP" and "SALE". If no writing, "0".
+7.  **SALE**: **Column 7**. The main quantity.
+8.  **CASH**: **Column 8**. (Left amount column).
+9.  **BAL**: **Column 9**. (Right amount column).
+10. **DELIVERY**: Name (e.g., Pushpa).
+11. **FOLLOW**: Date.
+
+### ROW ISOLATION RULES:
+- **Vertical Drift:** Never read values from the row above or below. 
+  - *Example:* If "Ravi Kirana" is Row 4, do not read "5" from Row 5 ("Shivam Store").
+- **Blank Cells:** If a cell is blank, return "0" for numbers and "" for text.
+
+### OUTPUT FORMAT (JSON ONLY):
 {
   "top": {
-    "date":"",      // top header date (as written)
-    "balPkt":"",    // BAL PKT from header
-    "totalPkt":"",  // TOTAL PKT from header
-    "newPkt":"",    // NEW PKT from header
-    "shift":""      // header shift text (if missing, "")
+    "date": "",       // Header Date
+    "balPkt": "",     // Header BAL PKT
+    "newPkt": "",     // Header NEW PKT
+    "totalPkt": "",   // Header TOTAL PKT
+    "shift": ""       // Header Shift
   },
   "items": [
     {
-      "no":"",            // row serial no
-      "shopName":"",      // customer name
-      "address":"",       // address/area
-      "samp":"",          // Sample Qty
-      "rep":"",           // Replacement Qty
-      "sale":"",          // Sale Qty
-      "cash":"",          // (legacy) keep "" if not present
-      "delPerson":"",     // Delivery Person
-      "phonenumber":"",   // phone/mobile
-      "packetPrice":"",   // price per packet
-      "cashAmount":"",    // Cash Amount
-      "followUpsDate":"", // Follow Up Date (YYYY-MM-DD if parsed, else empty)
-      "balanceAmount":""  // Balance Amount or BAL AMT
+      "no": "",           
+      "shopName": "",     
+      "address": "",      
+      "packetPrice": "",  
+      "samp": "0",         // SMP Column (Col 5)
+      "rep": "0",          // REP Column (Col 6) - BE CAREFUL HERE
+      "sale": "0",         // SALE Column (Col 7)
+      "cashAmount": "0",   // CASH Column (Col 8)
+      "balanceAmount": "0",// BAL Column (Col 9)
+      "delPerson": "",     
+      "followUpsDate": "", 
+      "phonenumber": ""    
     }
   ]
 }
 
-Sheet column order (left to right):
-1 sr | 2 customer name | 3 address | 4 price (packet price) | 5 sample qty | 6 rep qty | 7 sale qty | 8 cash amt | 9 bal amt | 10 delivery person | 11 follow up date. Use this order to map values.
-
-Top header fields:
-- date: read from top header line (e.g., "DATE 01-01-26"). Return exactly as written.
-- balPkt: from "BAL PKT" header.
-- newPkt: from "NEW PKT" header.
-- totalPkt: from "TOTAL PKT" header.
-- shift: if a shift label exists, return it; otherwise "".
-
-Field rules:
-- Always output valid JSON only. No markdown, no comments.
-- Use empty string "" when a cell is blank or unreadable.
-- Remove currency symbols and commas; keep plain numbers as strings.
-- packetPrice, samp, rep, sale, cashAmount, balanceAmount: numeric strings ("0" if blank).
-- phonenumber: numeric string; if absent, "".
-- followUpsDate: if a date is present, convert to YYYY-MM-DD; if unclear, return "".
-
-Row extraction discipline:
-- Respect the grid columns; do not mix Cash Amount with Balance Amount.
-- Use the visible serial number as "no"; keep row order.
-- Only include rows that have a customer name.
-
-Return JSON only.
+**FINAL INSTRUCTION:** Look at the header "REP" and trace it down. If the cell under it is empty, the JSON value for "rep" MUST be "0". Do not guess.
 `;
-
     const requestBody = {
       contents: [
         {
