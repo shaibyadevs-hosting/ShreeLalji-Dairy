@@ -217,6 +217,12 @@ export async function POST(req: NextRequest) {
 You are a high-precision OCR engine tasked with digitizing a handwritten dairy sales log. 
 **Your priority is 100% accuracy over speed. Analyze the image slowly and deeply.**
 
+### CRITICAL: DATE EXTRACTION
+- The date appears in the **TOP RIGHT corner** of the page (e.g., "DATE 14-01-2026")
+- Extract ONLY the date value in the format DD-MM-YYYY (e.g., "14-01-2026")
+- Do NOT extract dates from the "FOLLOW" column or anywhere else
+- Ignore any other numbers and focus on finding "DATE" label first, then read the date below/next to it
+
 ### THE CRITICAL CHALLENGE:
 The sheet has **three narrow columns** side-by-side that are easily confused. You must separate them strictly:
 1.  **SMP (Sample)**: Left narrow column.
@@ -251,7 +257,7 @@ Visualise vertical lines separating these columns. Do not cross them.
 ### OUTPUT FORMAT (JSON ONLY):
 {
   "top": {
-    "date": "",       // Header Date
+    "date": "",       // Header Date (DD-MM-YYYY, e.g., "14-01-2026")
     "balPkt": "",     // Header BAL PKT
     "newPkt": "",     // Header NEW PKT
     "totalPkt": "",   // Header TOTAL PKT
