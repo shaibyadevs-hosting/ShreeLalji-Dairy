@@ -43,7 +43,8 @@ import {
   Gift,
   RotateCcw,
   Crown,
-  CalendarDays
+  CalendarDays,
+  ExternalLink
 } from "lucide-react";
 
 type ViewMode = "chart" | "grid" | "delivery" | "customers";
@@ -538,6 +539,13 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
           >
             <RefreshCw className="w-4 h-4" />
             Refresh Data
+          </button>
+          <button
+            onClick={() => window.open('https://docs.google.com/spreadsheets/d/1OwmfDCO3AGBnHlViha2FPRySaGLPDPle106T0p3W-RA/edit?usp=sharing', '_blank')}
+            className="px-4 py-2.5 bg-green-600 rounded-lg shadow-sm hover:shadow-md transition-all text-white font-medium flex items-center gap-2 hover:bg-green-700"
+          >
+            <ExternalLink className="w-4 h-4" />
+            View Sheets
           </button>
           <div className="flex bg-white rounded-lg shadow-sm border border-gray-200 p-1">
             <button
