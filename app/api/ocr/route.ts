@@ -213,75 +213,72 @@ export async function POST(req: NextRequest) {
       console.log("[OCR] Extracted base64 from data URL");
     }
 
- const prompt = `
-You are a high-precision OCR engine tasked with digitizing a handwritten dairy sales log. 
-**Your priority is 100% accuracy over speed. Analyze the image slowly and deeply.**
+const prompt = `
+You are a robotic Document Parsing Engine. Your goal is 100% precision.
+**CRITICAL RULE: STRICT ROW ISOLATION.**
+Treat each row as a strictly horizontal line. **NEVER** look up or down to find missing values.
 
-### CRITICAL: DATE EXTRACTION
-- The date appears in the **TOP RIGHT corner** of the page (e.g., "DATE 14-01-2026")
-- Extract ONLY the date value in the format DD-MM-YYYY (e.g., "14-01-2026")
-- Do NOT extract dates from the "FOLLOW" column or anywhere else
-- Ignore any other numbers and focus on finding "DATE" label first, then read the date below/next to it
+### 1. THE "HORIZONTAL LOCK" STRATEGY
+- **Visualize a ruler** placed under each handwritten row. You must stay ABOVE that ruler.
+- **The "Greedy Search" Ban:** If a specific cell (like "REP") appears empty on the current line, **STOP**. Do NOT scan strictly downwards to find a number from the next row.
+  - *Bad Behavior:* "Row 5 REP is empty... oh, but Row 6 has a '2', I'll take that." -> **FORBIDDEN.**
+  - *Correct Behavior:* "Row 5 REP is empty. Output: 0."
+- **Line Consistency:** The "Customer Name" (Col 1), "Price" (Col 3), and "Sale" (Col 6) MUST all be on the exact same vertical Y-axis level.
 
-### THE CRITICAL CHALLENGE:
-The sheet has **three narrow columns** side-by-side that are easily confused. You must separate them strictly:
-1.  **SMP (Sample)**: Left narrow column.
-2.  **REP (Return)**: Middle narrow column (OFTEN BLANK).
-3.  **SALE (Sale)**: Right narrow column (Usually filled).
+### 2. HEADER EXTRACTION (Top Left)
+**The date format may vary (e.g., "03.01.2026" or "03/01/2026" or "03-01-2026").**
+1.  **Locate:** Find the label "DATE" in the top-left area.
+2.  **Extract:** Read the value next to it, ignoring the separator style (dots/slashes/dashes).
+3.  **Standardize:** Convert whatever you read into **DD-MM-YYYY** format for the JSON output.
+    - *Input Example:* "03.01.2026" -> Output: "03-01-2026"
+    - *Input Example:* "03/01/2026" -> Output: "03-01-2026"
+- **Date:** Extract "DATE" value 
+- **Packets:** "BAL PKT", "NEW PKT", "TOTAL PKT".
 
-**COMMON ERROR TO AVOID:** - Do NOT see a number in "SALE" (Column 7) and accidentally put it in "REP" (Column 6).
-- If "REP" is empty, output "0". Do NOT duplicate the Sale number into the Return column.
-- **Example Fix:** For Row 1 ("Morning SDF"), the image shows: SMP=4, REP=Blank, SALE=1. 
-  - *Wrong Extraction:* Sale:1, Sample:4, Return:1 (Incorrectly copied Sale to Return).
-  - *Correct Extraction:* Sale:1, Sample:4, Return:0.
+### 3. COLUMN MAPPING (Left-to-Right Scan)
+*Scan strictly left-to-right. Do not cross horizontal lines.*
 
-### STRICT COLUMN MAPPING (Left to Right):
-Visualise vertical lines separating these columns. Do not cross them.
-1.  **sr**: Serial No.
-2.  **customer name**: Name.
-3.  **ADDRESS**: Area.
-4.  **price**: (e.g., 65).
-5.  **SMP**: **Column 5**. Look immediately to the right of "price".
-6.  **REP**: **Column 6**. Look between "SMP" and "SALE". If no writing, "0".
-7.  **SALE**: **Column 7**. The main quantity.
-8.  **CASH**: **Column 8**. (Left amount column).
-9.  **BAL**: **Column 9**. (Right amount column).
-10. **DELIVERY**: Name (e.g., Pushpa).
-11. **FOLLOW**: Date.
+1. **SHOP NAME**: Text.
+2. **ADDRESS**: Text.
+3. **PRICE**: Number (The Anchor).
+   --- THE DANGER ZONE (Narrow Columns) ---
+   *Look strictly to the right of PRICE on the SAME text line:*
+4. **SAMP**: Number. (Immediate right of Price).
+5. **REP**: Number. (Middle column). **CRITICAL:** If blank, write "0". Do NOT look at the row below.
+6. **SALE**: Number. (Right column).
+   ----------------------------------------
+7. **CASH**: Number.
+8. **BAL**: Number.
+9. **DELIVERY**: Text.
+10. **FOLLOW UP**: Text.
 
-### ROW ISOLATION RULES:
-- **Vertical Drift:** Never read values from the row above or below. 
-  - *Example:* If "Ravi Kirana" is Row 4, do not read "5" from Row 5 ("Shivam Store").
-- **Blank Cells:** If a cell is blank, return "0" for numbers and "" for text.
+### 4. DATA SANITY CHECKS
+- **Blank means Blank:** If a cell has no ink, the value is "0" (for numbers) or "" (for text).
+- **No Drifting:** If "Ravi Kirana" is on line 4, and "Price 65" is on line 4, you CANNOT pick a "Sale" value from line 5.
 
-### OUTPUT FORMAT (JSON ONLY):
+### 5. OUTPUT JSON
 {
   "top": {
-    "date": "",       // Header Date (DD-MM-YYYY, e.g., "14-01-2026")
-    "balPkt": "",     // Header BAL PKT
-    "newPkt": "",     // Header NEW PKT
-    "totalPkt": "",   // Header TOTAL PKT
-    "shift": ""       // Header Shift
+    "date": "",
+    "balPkt": "",
+    "newPkt": "",
+    "totalPkt": ""
   },
   "items": [
     {
-      "no": "",           
-      "shopName": "",     
-      "address": "",      
-      "packetPrice": "",  
-      "samp": "0",         // SMP Column (Col 5)
-      "rep": "0",          // REP Column (Col 6) - BE CAREFUL HERE
-      "sale": "0",         // SALE Column (Col 7)
-      "cashAmount": "0",   // CASH Column (Col 8)
-      "balanceAmount": "0",// BAL Column (Col 9)
-      "delPerson": "",     
-      "followUpsDate": "", 
-      "phonenumber": ""    
+      "shopName": "",
+      "address": "",
+      "packetPrice": "",
+      "samp": "0",
+      "rep": "0",       // MUST be from the same row as shopName
+      "sale": "0",      // MUST be from the same row as shopName
+      "cashAmount": "0",
+      "balanceAmount": "0",
+      "delPerson": "",
+      "followUpsDate": ""
     }
   ]
 }
-
-**FINAL INSTRUCTION:** Look at the header "REP" and trace it down. If the cell under it is empty, the JSON value for "rep" MUST be "0". Do not guess.
 `;
     const requestBody = {
       contents: [
