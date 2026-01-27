@@ -26,7 +26,6 @@ type SheetRow = {
   sale?: string; // Sale Qty
   cash?: string; // Legacy field
   delPerson?: string;
-  phonenumber?: string;
   packetPrice?: string; // Packet Price per row
   cashAmount?: string; // Cash Amount (integer)
   followUpsDate?: string; // Follow-ups Date
@@ -56,6 +55,14 @@ function normalizeDate(input?: string): string {
   // Already correct format
   if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
     return input;
+  }
+
+  // dd.mm.yyyy
+  const dotMatch = input.match(/(\d{1,2})\.(\d{1,2})\.(\d{2,4})/);
+  if (dotMatch) {
+    const [, dd, mm, yyyy] = dotMatch;
+    const fullYear = yyyy.length === 2 ? (parseInt(yyyy, 10) < 50 ? `20${yyyy}` : `19${yyyy}`) : yyyy;
+    return `${fullYear}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
   }
 
   // dd-mm-yyyy or dd/mm/yyyy
@@ -116,8 +123,13 @@ export default function RightPanel() {
 
         if (!res.ok) {
           console.error("❌ OCR API error:", data);
-          const errorMessage =
-            data?.error || data?.details || "Unknown error occurred";
+          const isBusy =
+            res.status === 503 ||
+            /overloaded/i.test(data?.details || "") ||
+            /gemini api error/i.test(data?.error || "");
+          const errorMessage = isBusy
+            ? "OCR model is busy. Please retry in 10-20 seconds."
+            : data?.error || data?.details || "Unknown error occurred";
           alert("OCR failed: " + errorMessage);
           setIsLoading(false);
           window.dispatchEvent(new CustomEvent("ocr-complete", { detail: { success: false } }));
@@ -161,7 +173,6 @@ export default function RightPanel() {
             sale: String(it.sale ?? ""),
             cash: String(it.cash ?? ""),
             delPerson: String(it.delPerson ?? ""),
-            phonenumber: String(it.phonenumber ?? ""),
             packetPrice: String(it.packetPrice ?? ""),
             cashAmount: String(it.cashAmount ?? ""),
             followUpsDate: String(it.followUpsDate ?? ""),
@@ -206,7 +217,6 @@ export default function RightPanel() {
         sale: "",
         cash: "",
         delPerson: "",
-        phonenumber: "",
         packetPrice: "",
         cashAmount: "",
         followUpsDate: "",
@@ -296,7 +306,6 @@ export default function RightPanel() {
           
           return {
             shopName: row.shopName || "",
-            phone: row.phonenumber || "",
             packetPrice: packetPrice,
             saleQty: saleQty,
             sampleQty: sampleQty,
@@ -376,7 +385,6 @@ export default function RightPanel() {
       "Sale",
       "Cash",
       "Del.Person",
-      "Phone Number",
     ];
     const lines = [hdr.join(",")];
     rows.forEach((r) =>
@@ -390,7 +398,6 @@ export default function RightPanel() {
           r.sale ?? "",
           r.cash ?? "",
           r.delPerson ?? "",
-          r.phonenumber ?? "",
         ]
           .map((v) => {
             const s = String(v ?? "");
@@ -890,14 +897,6 @@ export default function RightPanel() {
                             className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                             placeholder="Delivery Person"
                           />
-                          <input
-                            value={row.phonenumber ?? ""}
-                            onChange={(e) =>
-                              updateRow(idx, "phonenumber", e.target.value)
-                            }
-                            className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
-                            placeholder="Phone Number"
-                  />
                         </div>
                 </td>
 
@@ -1029,12 +1028,6 @@ export default function RightPanel() {
               <div className="text-xs text-gray-500 mb-1">Address</div>
               <div className="font-medium">
                 {rows[expandedRow].address || "—"}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-gray-500 mb-1">Phone</div>
-              <div className="font-medium">
-                {rows[expandedRow].phonenumber || "—"}
               </div>
             </div>
             <div>

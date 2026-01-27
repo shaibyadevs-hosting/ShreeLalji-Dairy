@@ -21,6 +21,7 @@ export async function GET(_req: NextRequest) {
 
     for (const row of rows) {
       // Column D (index 3) is Total Purchase Count
+      // MasterCustomers: 0: Customer Name, 1: Normalized Shop Name, 2: Address, 3: Total Purchase Count
       const purchaseCount = parseInt((row[3] || "0").toString()) || 0;
 
       if (purchaseCount > 1) {

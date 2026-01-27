@@ -55,12 +55,13 @@ async function initDeliverySummary() {
       console.log(`[DeliverySummary Init] Processing ${rows.length} rows from ${sheetName}`);
 
       for (const row of rows) {
-        // Column N (index 13) is Delivery Person
-        // Column H (index 7) is Sale Amount
-        // Column O (index 14) is Payment Status
-        const delPerson = (row[13] || "").toString().trim();
-        const saleAmount = parseFloat(row[7] || "0") || 0;
-        const paymentStatus = (row[14] || "").toString().toLowerCase();
+        // Updated column indices after removing Phone column:
+        // Column M (index 12) is Delivery Person
+        // Column G (index 6) is Sale Amount (Total Amount)
+        // Column N (index 13) is Cash Amount
+        const delPerson = (row[12] || "").toString().trim();
+        const saleAmount = parseFloat(row[6] || "0") || 0;
+        const paymentStatus = (row[13] || "").toString().toLowerCase();
 
         if (!delPerson) continue;
 

@@ -7,6 +7,7 @@ import {
   DailyBillsInput,
   DailyBillItem,
 } from "./types"; 
+import { normalizeShopName } from "./normalizeShopName"; 
 
 // Initialize Google Sheets API
 const getGoogleSheetsClient = () => {
@@ -45,7 +46,7 @@ const DAILY_BILLS_SHEET = "Daily Bills";
 const MASTER_CUSTOMER_SHEET = "MasterCustomers";
 const MASTER_CUSTOMER_HEADERS = [
   "Customer Name",
-  "Phone Number",
+  "Normalized Shop Name",
   "Address",
   "Total Purchase Count",
   "Total Amount Spent",
@@ -54,11 +55,6 @@ const MASTER_CUSTOMER_HEADERS = [
   "Flag",
   "Last Modified",
 ];
-
-// Helper: Normalize phone number (remove spaces, dashes, etc.)
-const normalizePhoneNumber = (phone: string): string => {
-  return phone.replace(/[\s\-\(\)]/g, "");
-};
 
 // Helper: Format date to DD-MM-YYYY
 const formatDate = (date: Date | string): string => {
@@ -88,7 +84,7 @@ export async function appendBillToSheet(billData: BillData): Promise<void> {
     formattedDate,
     billData.billNumber || "",
     billData.customerName,
-    normalizePhoneNumber(billData.phoneNumber),
+    normalizeShopName(billData.customerName), // Use normalized shop name instead of phone
     billData.products,
     billData.quantity,
     billData.price,
@@ -145,7 +141,7 @@ export async function getAllBills(): Promise<BillData[]> {
     date: row[0] || "",
     billNumber: row[1] || "",
     customerName: row[2] || "",
-    phoneNumber: row[3] || "",
+    normalizedShopName: row[3] || "",
     products: row[4] || "",
     quantity: row[5] || "",
     price: row[6] || "",
@@ -169,14 +165,14 @@ export async function getAllBills(): Promise<BillData[]> {
 }
 
 /**
- * Find a customer by phone number in Master Customer sheet
+ * Find a customer by shop name in Master Customer sheet
+ * Uses normalized shop name for matching
  */
-
-export async function findCustomerByPhone(
-  phoneNumber: string
+export async function findCustomerByShopName(
+  shopName: string
 ): Promise<{ customer: CustomerData | null; rowIndex: number }> {
   const sheets = getGoogleSheetsClient();
-  const normalizedPhone = normalizePhoneNumber(phoneNumber);
+  const normalizedName = normalizeShopName(shopName);
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -187,9 +183,9 @@ export async function findCustomerByPhone(
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const customerPhone = normalizePhoneNumber(row[1] || "");
+    const customerNormalizedName = (row[1] || "").toString().trim();
 
-    if (customerPhone === normalizedPhone) {
+    if (customerNormalizedName === normalizedName) {
       let purchaseHistory: PurchaseRecord[] = [];
       try {
         purchaseHistory = row[7] ? JSON.parse(row[7]) : [];
@@ -200,7 +196,7 @@ export async function findCustomerByPhone(
       return {
         customer: {
           customerName: row[0] || "",
-          phoneNumber: row[1] || "",
+          normalizedShopName: row[1] || "",
           email: row[2] || "",
           address: row[3] || "",
           totalPurchaseCount: parseInt(row[4] || "0"),
@@ -234,7 +230,7 @@ export async function createCustomer(billData: BillData): Promise<void> {
 
   const row = [
     billData.customerName,
-    normalizePhoneNumber(billData.phoneNumber),
+    normalizeShopName(billData.customerName), // Use normalized shop name
     "", // email (optional)
     billData.address || "",
     1, // totalPurchaseCount
@@ -289,7 +285,7 @@ export async function updateCustomer(
 
   const row = [
     existingCustomer.customerName,
-    normalizePhoneNumber(existingCustomer.phoneNumber),
+    normalizeShopName(existingCustomer.customerName), // Use normalized shop name
     existingCustomer.email || "",
     updatedAddress,
     updatedTotalPurchaseCount,
@@ -334,7 +330,7 @@ export async function getAllCustomers(): Promise<CustomerData[]> {
 
     return {
       customerName: row[0] || "",
-      phoneNumber: row[1] || "",
+      normalizedShopName: row[1] || "",
       email: row[2] || "",
       address: row[3] || "",
       totalPurchaseCount: parseInt(row[4] || "0"),
@@ -361,9 +357,9 @@ export async function processBill(billData: BillData): Promise<void> {
   // 1. Append to Daily Bills sheet
   await appendBillToSheet(billData);
 
-  // 2. Check if customer exists
-  const { customer, rowIndex } = await findCustomerByPhone(
-    billData.phoneNumber
+  // 2. Check if customer exists using normalized shop name
+  const { customer, rowIndex } = await findCustomerByShopName(
+    billData.customerName
   );
 
   if (customer) {
@@ -420,7 +416,7 @@ export async function initializeSheets(): Promise<void> {
               "Date",
               "Bill Number",
               "Customer Name",
-              "Phone Number",
+              "Normalized Shop Name",
               "Products",
               "Quantity",
               "Price",
@@ -463,7 +459,7 @@ export async function initializeSheets(): Promise<void> {
           values: [
             [
               "Customer Name",
-              "Phone Number",
+              "Normalized Shop Name",
               "Email",
               "Address",
               "Total Purchase Count",
@@ -529,11 +525,10 @@ export async function createDailySheet(sheetName: string): Promise<void> {
       },
     });
 
-    // Add headers (including expense columns R-V)
+    // Add headers (removed Phone column)
     const headers = [
       "Date",
       "Shop Name",
-      "Phone",
       "Packet Price",
       "Sale Qty",
       "Sample Qty",
@@ -560,7 +555,7 @@ export async function createDailySheet(sheetName: string): Promise<void> {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A1:X1`,
+      range: `${sheetName}!A1:W1`,
       valueInputOption: "RAW",
       requestBody: {
         values: [headers],
@@ -583,7 +578,7 @@ export async function appendDailyRows(
   shift: string,
   items: Array<{
     shopName: string;
-    phone: string;
+    normalizedShopName?: string;
     packetPrice: number;
     saleQty: number;
     sampleQty: number;
@@ -627,12 +622,11 @@ export async function appendDailyRows(
     // Net_Revenue = Total_Sales_Amount − Total_Expense
     const netRevenue = totalSaleAmount - totalExpenses;
     
-    // Convert items to rows
+    // Convert items to rows (removed phone column)
     const rows = items.map((item, index) => {
       const baseRow = [
         date,
         item.shopName,
-        item.phone,
         item.packetPrice.toString(),
         item.saleQty.toString(),
         item.sampleQty.toString(),
@@ -804,14 +798,14 @@ export async function updateOrInsertCustomer(
   date: string
 ): Promise<void> {
   try {
-    const phoneRaw = (item.phone ?? "").toString().trim();
+    const shopNameRaw = (item.shopName ?? "").toString().trim();
 
-    if (!phoneRaw) {
-      console.warn("[MasterCustomers] Skipping entry without phone number");
+    if (!shopNameRaw) {
+      console.warn("[MasterCustomers] Skipping entry without shop name");
       return;
     }
 
-    const normalizedPhone = normalizePhoneNumber(phoneRaw);
+    const normalizedName = normalizeShopName(shopNameRaw);
     // Only count Sale Qty and Sale Amount for customer totals
     // Sample and Return do NOT count toward customer purchase count or spending
     const saleQty = Number(item.saleQty) || 0;
@@ -835,8 +829,8 @@ export async function updateOrInsertCustomer(
     let existingIndex = -1;
 
     for (let i = 0; i < rows.length; i++) {
-      const currentPhone = normalizePhoneNumber(rows[i][1] || "");
-      if (currentPhone === normalizedPhone) {
+      const currentNormalizedName = (rows[i][1] || "").toString().trim();
+      if (currentNormalizedName === normalizedName) {
         existingIndex = i;
         break;
       }
@@ -846,7 +840,7 @@ export async function updateOrInsertCustomer(
       // INSERT NEW CUSTOMER
       const newRow = [
         item.shopName || "Unknown Customer",
-        normalizedPhone,
+        normalizedName,
         item.address || "",
         saleQty > 0 ? 1 : 0, // Total Purchase Count (only if saleQty > 0)
         saleAmount, // Total Amount Spent (only Sale Amount)
@@ -866,7 +860,7 @@ export async function updateOrInsertCustomer(
       });
 
       console.log(
-        `[MasterCustomers] 🆕 Added new customer: ${item.shopName || normalizedPhone} (Flag=1)`
+        `[MasterCustomers] 🆕 Added new customer: ${item.shopName} (normalized: ${normalizedName}, Flag=1)`
       );
       return;
     }
@@ -895,7 +889,7 @@ export async function updateOrInsertCustomer(
     const purchaseCountIncrement = saleQty > 0 ? 1 : 0;
     const updatedRow = [
       existingRow[0] || item.shopName || "Unknown Customer",
-      normalizedPhone,
+      normalizedName,
       item.address || existingRow[2] || "",
       existingCount + purchaseCountIncrement, // Increment purchase count only for sales
       existingAmount + saleAmount, // Add only Sale Amount to total
@@ -916,7 +910,7 @@ export async function updateOrInsertCustomer(
     });
 
     console.log(
-      `[MasterCustomers] ✏️ Updated customer row ${rowNumber} (${normalizedPhone}, Flag=0)`
+      `[MasterCustomers] ✏️ Updated customer row ${rowNumber} (${normalizedName}, Flag=0)`
     );
   } catch (error) {
     console.error("[MasterCustomers] ❌ Error updating customer:", error);
@@ -931,7 +925,7 @@ export async function updateOrInsertCustomer(
 const CALL_FOLLOWUPS_SHEET = "FollowUpCalls";
 const CALL_FOLLOWUPS_HEADERS = [
   "Name",
-  "Phone Number",
+  "Normalized Shop Name",
   "Call Date",
   "Call Time",
   "Notes",
@@ -988,15 +982,16 @@ export async function ensureCallFollowUpsSheet(): Promise<void> {
 
 /**
  * Check if a call follow-up already exists (duplicate check)
+ * Uses normalized shop name instead of phone
  */
 export async function callFollowUpExists(
-  phone: string,
+  shopName: string,
   callDate: string,
   callTime: string
 ): Promise<boolean> {
   try {
     const sheets = getSheetsClient();
-    const normalizedPhone = normalizePhoneNumber(phone);
+    const normalizedName = normalizeShopName(shopName);
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
@@ -1005,11 +1000,11 @@ export async function callFollowUpExists(
 
     const rows = response.data.values || [];
     for (const row of rows) {
-      const rowPhone = normalizePhoneNumber((row[1] || "").toString().trim());
+      const rowNormalizedName = (row[1] || "").toString().trim();
       const rowDate = (row[2] || "").toString().trim();
       const rowTime = (row[3] || "").toString().trim();
 
-      if (rowPhone === normalizedPhone && rowDate === callDate && rowTime === callTime) {
+      if (rowNormalizedName === normalizedName && rowDate === callDate && rowTime === callTime) {
         return true;
       }
     }
@@ -1023,29 +1018,29 @@ export async function callFollowUpExists(
 
 /**
  * Save a new call follow-up with duplicate check
+ * Uses normalized shop name instead of phone
  */
 export async function saveCallFollowUp(data: {
   name: string;
-  phone: string;
   callDate: string;
   callTime: string;
   notes?: string;
 }): Promise<{ saved: boolean; duplicate: boolean }> {
   try {
     const sheets = getSheetsClient();
-    const normalizedPhone = normalizePhoneNumber(data.phone);
+    const normalizedName = normalizeShopName(data.name);
     const today = formatDate(new Date());
 
     // Check for duplicate
-    const exists = await callFollowUpExists(data.phone, data.callDate, data.callTime);
+    const exists = await callFollowUpExists(data.name, data.callDate, data.callTime);
     if (exists) {
-      console.log(`[CallFollowUps] ⚠️ Duplicate found: ${data.name} (${normalizedPhone}, ${data.callDate}, ${data.callTime})`);
+      console.log(`[CallFollowUps] ⚠️ Duplicate found: ${data.name} (${normalizedName}, ${data.callDate}, ${data.callTime})`);
       return { saved: false, duplicate: true };
     }
 
     const row = [
       data.name || "",
-      normalizedPhone,
+      normalizedName,
       data.callDate || "",
       data.callTime || "",
       data.notes || "",
@@ -1072,11 +1067,11 @@ export async function saveCallFollowUp(data: {
 
 /**
  * Batch save multiple call follow-ups (for OCR results)
+ * Uses normalized shop name instead of phone
  */
 export async function batchSaveCallFollowUps(
   calls: Array<{
     name: string;
-    phone: string;
     callDate: string;
     callTime: string;
     notes?: string;
@@ -1099,10 +1094,10 @@ export async function batchSaveCallFollowUps(
     const existingKeys = new Set<string>();
 
     for (const row of existingRows) {
-      const phone = normalizePhoneNumber((row[1] || "").toString().trim());
+      const normalizedName = (row[1] || "").toString().trim();
       const date = (row[2] || "").toString().trim();
       const time = (row[3] || "").toString().trim();
-      existingKeys.add(`${phone}|${date}|${time}`);
+      existingKeys.add(`${normalizedName}|${date}|${time}`);
     }
 
     // Prepare new rows (non-duplicates only)
@@ -1110,8 +1105,8 @@ export async function batchSaveCallFollowUps(
 
     for (const call of calls) {
       try {
-        const normalizedPhone = normalizePhoneNumber(call.phone);
-        const key = `${normalizedPhone}|${call.callDate}|${call.callTime}`;
+        const normalizedName = normalizeShopName(call.name);
+        const key = `${normalizedName}|${call.callDate}|${call.callTime}`;
 
         if (existingKeys.has(key)) {
           duplicates++;
@@ -1122,7 +1117,7 @@ export async function batchSaveCallFollowUps(
         existingKeys.add(key); // Add to set to prevent duplicates within batch
         newRows.push([
           call.name || "",
-          normalizedPhone,
+          normalizedName,
           call.callDate || "",
           call.callTime || "",
           call.notes || "",
@@ -1195,7 +1190,7 @@ export async function getTodayCalls(): Promise<any[]> {
       })
       .map((row) => ({
         name: (row[0] || "").toString().trim(),
-        phone: (row[1] || "").toString().trim(),
+        normalizedShopName: (row[1] || "").toString().trim(),
         callDate: (row[2] || "").toString().trim(),
         callTime: (row[3] || "").toString().trim(),
         notes: (row[4] || "").toString().trim(),
@@ -1251,7 +1246,7 @@ export async function getCallsByDate(date: string): Promise<any[]> {
       })
       .map((row) => ({
         name: (row[0] || "").toString().trim(),
-        phone: (row[1] || "").toString().trim(),
+        normalizedShopName: (row[1] || "").toString().trim(),
         callDate: (row[2] || "").toString().trim(),
         callTime: (row[3] || "").toString().trim(),
         notes: (row[4] || "").toString().trim(),
@@ -1282,7 +1277,7 @@ export async function getAllCalls(): Promise<any[]> {
     const rows = response.data.values || [];
     const calls = rows.map((row) => ({
       name: (row[0] || "").toString().trim(),
-      phone: (row[1] || "").toString().trim(),
+      normalizedShopName: (row[1] || "").toString().trim(),
       callDate: (row[2] || "").toString().trim(),
       callTime: (row[3] || "").toString().trim(),
       notes: (row[4] || "").toString().trim(),
@@ -1299,13 +1294,33 @@ export async function getAllCalls(): Promise<any[]> {
 
 /**
  * Get all daily bills from all daily sheets for financial calculations
+ * @param startDate - Optional start date (DD-MM-YYYY). If omitted, includes all.
+ * @param endDate - Optional end date (DD-MM-YYYY). If omitted, uses startDate only.
  */
-export async function getAllDailyBillsForMetrics(): Promise<{
+export async function getAllDailyBillsForMetrics(
+  startDate?: string,
+  endDate?: string
+): Promise<{
   totalSaleAmount: number;
   totalSampleAmount: number;
   totalReturnAmount: number;
   totalOrders: number;
   totalBalanceAmount: number;
+  totalExpenses: number;
+  rawMaterialExpense: number;
+  electricityExpense: number;
+  laborCharges: number;
+  godownRent: number;
+  petrolFuelCharges: number;
+  expenseByDate: Array<{
+    date: string;
+    totalExpenses: number;
+    rawMaterial: number;
+    electricity: number;
+    labor: number;
+    godownRent: number;
+    petrolFuel: number;
+  }>;
 }> {
   try {
     const sheets = getSheetsClient();
@@ -1321,43 +1336,127 @@ export async function getAllDailyBillsForMetrics(): Promise<{
         .filter((title) => !!title) || [];
 
     // Filter daily sheets (DD-MM-YYYY-Shift pattern)
-    const dailySheets = sheetNames.filter((name) =>
+    let dailySheets = sheetNames.filter((name) =>
       /^\d{2}-\d{2}-\d{4}-/.test(name)
     );
+
+    console.log(`[Metrics] Found ${dailySheets.length} daily sheets:`, dailySheets);
+
+    // If start/end date provided, filter by inclusive range
+    if (startDate || endDate) {
+      const normalizeDate = (d: string) => {
+        const [dd, mm, yy] = d.split("-").map(Number);
+        return new Date(yy, mm - 1, dd).getTime();
+      };
+
+      const startTs = startDate ? normalizeDate(startDate) : Number.MIN_SAFE_INTEGER;
+      const endTs = endDate ? normalizeDate(endDate) : Number.MAX_SAFE_INTEGER;
+
+      dailySheets = dailySheets.filter((name) => {
+        const key = name.slice(0, 10); // DD-MM-YYYY
+        const ts = normalizeDate(key);
+        return ts >= startTs && ts <= endTs;
+      });
+      console.log(`[Metrics] Filtered to ${dailySheets.length} sheets for range ${startDate || 'ALL'} to ${endDate || 'ALL'}`);
+    }
 
     let totalSaleAmount = 0;
     let totalSampleAmount = 0;
     let totalReturnAmount = 0;
     let totalOrders = 0;
     let totalBalanceAmount = 0;
+    let totalExpenses = 0;
+    let rawMaterialExpense = 0;
+    let electricityExpense = 0;
+    let laborCharges = 0;
+    let godownRent = 0;
+    let petrolFuelCharges = 0;
+    const expenseByDateMap: Record<string, {
+      totalExpenses: number;
+      rawMaterial: number;
+      electricity: number;
+      labor: number;
+      godownRent: number;
+      petrolFuel: number;
+    }> = {};
 
     // Process each daily sheet
     for (const sheetName of dailySheets) {
       try {
-        // Read sheet data (columns A-P to include Payment Status and Balance Amount)
+        // Read sheet data (columns A-W to include all expense columns)
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheetName}!A2:P`, // Skip header row, include Payment Status (O) and Balance Amount (P)
+          range: `${sheetName}!A2:W`, // Skip header row, include all columns up to Net Revenue
         });
 
         const rows = response.data.values || [];
-        
-        for (const row of rows) {
-          // Column indices:
-          // D = Packet Price (index 3)
-          // E = Sale Qty (index 4)
-          // F = Sample Qty (index 5)
-          // G = Return Qty (index 6)
-          // H = Sale Amount (index 7)
-          // I = Sample Amount (index 8)
-          // J = Return Amount (index 9)
-          // O = Payment Status (index 14)
-          // P = Balance Amount (index 15)
+        const dateKey = sheetName.slice(0, 10); // DD-MM-YYYY (e.g., "03-01-2026")
+
+        // Expense data is stored ONLY in the FIRST ROW of each sheet (daily totals, not per-customer)
+        if (rows.length > 0) {
+          const firstRow = rows[0];
           
-          const saleAmount = parseFloat((row[7] || "0").toString()) || 0;
-          const sampleAmount = parseFloat((row[8] || "0").toString()) || 0;
-          const returnAmount = parseFloat((row[9] || "0").toString()) || 0;
-          const saleQty = parseFloat((row[4] || "0").toString()) || 0;
+          // Detect column structure: old sheets (with Phone) have expenses at indices 17-22,
+          // new sheets (without Phone) have expenses at indices 16-21
+          // Check if column 21 has Total Expenses or if it's at column 22
+          const totalExpAt21 = parseFloat((firstRow[21] || "0").toString()) || 0;
+          const totalExpAt22 = parseFloat((firstRow[22] || "0").toString()) || 0;
+          
+          // If column 22 has a value and column 21 doesn't, use old structure (shifted by 1)
+          const expenseOffset = (totalExpAt22 > 0 && totalExpAt21 === 0) ? 1 : 0;
+          
+          // Expense columns with dynamic offset:
+          // New: Q=16 (Raw Material), R=17, S=18, T=19, U=20, V=21 (Total Expenses)
+          // Old: R=17 (Raw Material), S=18, T=19, U=20, V=21, W=22 (Total Expenses)
+          const sheetRawMat = parseFloat((firstRow[16 + expenseOffset] || "0").toString()) || 0;
+          const sheetElectricity = parseFloat((firstRow[17 + expenseOffset] || "0").toString()) || 0;
+          const sheetLabor = parseFloat((firstRow[18 + expenseOffset] || "0").toString()) || 0;
+          const sheetGodown = parseFloat((firstRow[19 + expenseOffset] || "0").toString()) || 0;
+          const sheetPetrol = parseFloat((firstRow[20 + expenseOffset] || "0").toString()) || 0;
+          const sheetTotalExpense = parseFloat((firstRow[21 + expenseOffset] || "0").toString()) || 0;
+
+          console.log(`[Metrics] Sheet ${sheetName}: offset=${expenseOffset}, TotalExpenses=${sheetTotalExpense}, RawMat=${sheetRawMat}, [21]=${totalExpAt21}, [22]=${totalExpAt22}`);
+
+          // Add to global totals
+          rawMaterialExpense += sheetRawMat;
+          electricityExpense += sheetElectricity;
+          laborCharges += sheetLabor;
+          godownRent += sheetGodown;
+          petrolFuelCharges += sheetPetrol;
+          totalExpenses += sheetTotalExpense;
+
+          // Aggregate by date (multiple shifts on same date get combined)
+          if (!expenseByDateMap[dateKey]) {
+            expenseByDateMap[dateKey] = {
+              totalExpenses: 0,
+              rawMaterial: 0,
+              electricity: 0,
+              labor: 0,
+              godownRent: 0,
+              petrolFuel: 0,
+            };
+          }
+          expenseByDateMap[dateKey].totalExpenses += sheetTotalExpense;
+          expenseByDateMap[dateKey].rawMaterial += sheetRawMat;
+          expenseByDateMap[dateKey].electricity += sheetElectricity;
+          expenseByDateMap[dateKey].labor += sheetLabor;
+          expenseByDateMap[dateKey].godownRent += sheetGodown;
+          expenseByDateMap[dateKey].petrolFuel += sheetPetrol;
+        }
+
+        // Process all rows for sales/sample/return/balance data
+        for (const row of rows) {
+          // Updated column indices after removing Phone column:
+          // A = Date (0), B = Shop Name (1), C = Packet Price (2)
+          // D = Sale Qty (3), E = Sample Qty (4), F = Return Qty (5)
+          // G = Total Amount/Sale Amount (6), H = Sample Amount (7), I = Return Amount (8)
+          // J = Shift (9), K = Address (10), L = Rep (11), M = Delivery Person (12)
+          // N = Cash Amount (13), O = Follow-ups Date (14), P = Balance Amount (15)
+
+          const saleAmount = parseFloat((row[6] || "0").toString()) || 0;
+          const sampleAmount = parseFloat((row[7] || "0").toString()) || 0;
+          const returnAmount = parseFloat((row[8] || "0").toString()) || 0;
+          const saleQty = parseFloat((row[3] || "0").toString()) || 0;
           const balanceAmount = parseFloat((row[15] || "0").toString()) || 0;
 
           totalSaleAmount += saleAmount;
@@ -1376,13 +1475,40 @@ export async function getAllDailyBillsForMetrics(): Promise<{
       }
     }
 
-    return {
+    const result = {
       totalSaleAmount,
       totalSampleAmount,
       totalReturnAmount,
       totalOrders,
       totalBalanceAmount,
+      totalExpenses,
+      rawMaterialExpense,
+      electricityExpense,
+      laborCharges,
+      godownRent,
+      petrolFuelCharges,
+      expenseByDate: Object.entries(expenseByDateMap)
+        .filter(([, vals]) => vals.totalExpenses > 0) // Only include dates with expenses
+        .map(([date, vals]) => ({
+          date,
+          totalExpenses: vals.totalExpenses,
+          rawMaterial: vals.rawMaterial,
+          electricity: vals.electricity,
+          labor: vals.labor,
+          godownRent: vals.godownRent,
+          petrolFuel: vals.petrolFuel,
+        }))
+        .sort((a, b) => {
+          const [d1, m1, y1] = a.date.split("-").map(Number);
+          const [d2, m2, y2] = b.date.split("-").map(Number);
+          return new Date(y2, m2 - 1, d2).getTime() - new Date(y1, m1 - 1, d1).getTime();
+        }),
     };
+
+    console.log(`[Metrics] FINAL TOTALS: totalExpenses=${totalExpenses}, rawMat=${rawMaterialExpense}, expenseByDate count=${Object.keys(expenseByDateMap).length}`);
+    console.log(`[Metrics] expenseByDateMap:`, JSON.stringify(expenseByDateMap));
+    
+    return result;
   } catch (error) {
     console.error("[Metrics] Error fetching daily bills for metrics:", error);
     return {
@@ -1391,20 +1517,28 @@ export async function getAllDailyBillsForMetrics(): Promise<{
       totalReturnAmount: 0,
       totalOrders: 0,
       totalBalanceAmount: 0,
+      totalExpenses: 0,
+      rawMaterialExpense: 0,
+      electricityExpense: 0,
+      laborCharges: 0,
+      godownRent: 0,
+      petrolFuelCharges: 0,
+      expenseByDate: [],
     };
   }
 }
 
 /**
  * Update call status to "Called"
+ * Uses normalized shop name instead of phone
  */
 export async function updateCallStatus(
-  phone: string,
+  shopName: string,
   callDate: string
 ): Promise<void> {
   try {
     const sheets = getSheetsClient();
-    const normalizedPhone = normalizePhoneNumber(phone);
+    const normalizedName = normalizeShopName(shopName);
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
@@ -1415,9 +1549,9 @@ export async function updateCallStatus(
     let rowIndex = -1;
 
     for (let i = 0; i < rows.length; i++) {
-      const rowPhone = normalizePhoneNumber((rows[i][1] || "").toString().trim());
+      const rowNormalizedName = (rows[i][1] || "").toString().trim();
       const rowDate = (rows[i][2] || "").toString().trim();
-      if (rowPhone === normalizedPhone && rowDate === callDate) {
+      if (rowNormalizedName === normalizedName && rowDate === callDate) {
         rowIndex = i + 2; // +2 because sheets are 1-indexed and we skipped header
         break;
       }
@@ -1437,7 +1571,7 @@ export async function updateCallStatus(
       },
     });
 
-    console.log(`[CallFollowUps] ✅ Updated status to Called for ${phone}`);
+    console.log(`[CallFollowUps] ✅ Updated status to Called for ${shopName}`);
   } catch (error) {
     console.error("[CallFollowUps] ❌ Error updating call status:", error);
     throw error;

@@ -29,7 +29,6 @@ import {
 
 type CallFollowUp = {
   name: string;
-  phone: string;
   callDate: string;
   callTime: string;
   notes: string;
@@ -41,13 +40,11 @@ export default function FollowUpsPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     name: "",
-    phone: "",
     callDate: "",
     callTime: "",
     timePeriod: "AM", // AM or PM
     notes: "",
   });
-  const [phoneError, setPhoneError] = useState("");
   const [todayCalls, setTodayCalls] = useState<CallFollowUp[]>([]);
   const [filteredCalls, setFilteredCalls] = useState<CallFollowUp[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
@@ -119,7 +116,6 @@ export default function FollowUpsPage() {
     if (searchQuery) {
       const filtered = filteredCalls.filter(call => 
         call.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        call.phone.includes(searchQuery) ||
         call.notes.toLowerCase().includes(searchQuery.toLowerCase())
       );
       setFilteredCalls(filtered);
@@ -197,18 +193,7 @@ export default function FollowUpsPage() {
     }
   };
 
-  // Handle phone number input with validation
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, ""); // Remove non-digits
-    if (value.length <= 10) {
-      setFormData({ ...formData, phone: value });
-      if (value.length > 0 && value.length !== 10) {
-        setPhoneError("Phone number must be 10 digits");
-      } else {
-        setPhoneError("");
-      }
-    }
-  };
+
 
   // Convert 12-hour time to 24-hour format
   const convertTo24Hour = (time: string, period: string): string => {
@@ -238,12 +223,6 @@ export default function FollowUpsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate phone number
-    if (formData.phone.length !== 10) {
-      setPhoneError("Phone number must be exactly 10 digits");
-      return;
-    }
-    
     // Validate time format (1-12 hours, 00-59 minutes)
     // Allow both single digit (1-9) and double digit (01-12) hours
     const timeRegex = /^(0?[1-9]|1[0-2]):([0-5][0-9])$/;
@@ -252,7 +231,7 @@ export default function FollowUpsPage() {
       return;
     }
     
-    if (!formData.name || !formData.phone || !formData.callDate || !formData.callTime) {
+    if (!formData.name || !formData.callDate || !formData.callTime) {
       alert("Please fill in all required fields");
       return;
     }
@@ -271,7 +250,6 @@ export default function FollowUpsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: formData.name,
-          phone: formData.phone,
           callDate: formattedDate,
           callTime: time24Hour,
           notes: formData.notes,
@@ -285,13 +263,11 @@ export default function FollowUpsPage() {
         // Reset form
         setFormData({
           name: "",
-          phone: "",
           callDate: "",
           callTime: "",
           timePeriod: "AM",
           notes: "",
         });
-        setPhoneError("");
         // Refresh today's list and stats
         loadStats();
         loadTodayCalls();
@@ -307,7 +283,7 @@ export default function FollowUpsPage() {
   };
 
   // Handle mark as called
-  const handleMarkAsCalled = async (phone: string, callDate: string) => {
+  const handleMarkAsCalled = async (shopName: string, callDate: string) => {
     if (!confirm("Mark this call as 'Called'?")) {
       return;
     }
@@ -316,7 +292,7 @@ export default function FollowUpsPage() {
       const response = await fetch("/api/followups/status", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, callDate }),
+        body: JSON.stringify({ shopName, callDate }),
       });
 
       const data = await response.json();
@@ -379,7 +355,14 @@ export default function FollowUpsPage() {
       const ocrData = await ocrResponse.json();
 
       if (!ocrResponse.ok || !ocrData.success) {
-        throw new Error(ocrData.error || ocrData.details || "OCR extraction failed");
+        const isBusy =
+          ocrResponse.status === 503 ||
+          /overloaded/i.test(ocrData?.details || "") ||
+          /gemini api error/i.test(ocrData?.error || "");
+        const friendlyMessage = isBusy
+          ? "OCR model is busy. Please retry in 10-20 seconds."
+          : ocrData.error || ocrData.details || "OCR extraction failed";
+        throw new Error(friendlyMessage);
       }
 
       if (!ocrData.calls || ocrData.calls.length === 0) {
@@ -589,37 +572,8 @@ export default function FollowUpsPage() {
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                      placeholder="Enter customer name"
+                      placeholder="Enter customer/shop name"
                     />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                      <Phone className="w-4 h-4" />
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={handlePhoneChange}
-                      required
-                      maxLength={10}
-                      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition ${
-                        phoneError ? "border-red-300 focus:ring-red-500" : "border-gray-300"
-                      }`}
-                      placeholder="Enter 10-digit phone number"
-                    />
-                    {phoneError && (
-                      <p className="text-sm text-red-600 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        {phoneError}
-                      </p>
-                    )}
-                    {!phoneError && formData.phone.length > 0 && formData.phone.length < 10 && (
-                      <p className="text-sm text-gray-500">
-                        {10 - formData.phone.length} digit(s) remaining
-                      </p>
-                    )}
                   </div>
                 </div>
 
@@ -820,7 +774,7 @@ export default function FollowUpsPage() {
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search by name, phone, or notes..."
+                      placeholder="Search by name or notes..."
                       className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     />
                   </div>
@@ -898,11 +852,6 @@ export default function FollowUpsPage() {
                             
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Phone className="w-3 h-3" />
-                                <span>{call.phone}</span>
-                              </div>
-                              
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
                                 <Calendar className="w-3 h-3" />
                                 <span>{formatDate(call.callDate)} at {call.callTime}</span>
                               </div>
@@ -917,7 +866,7 @@ export default function FollowUpsPage() {
                             
                             {call.status === "Pending" && (
                               <button
-                                onClick={() => handleMarkAsCalled(call.phone, call.callDate)}
+                                onClick={() => handleMarkAsCalled(call.name, call.callDate)}
                                 className="mt-3 px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm rounded-lg font-medium hover:shadow-lg hover:shadow-green-500/25 transition-all flex items-center gap-2"
                               >
                                 <CheckCircle className="w-3 h-3" />
@@ -1012,14 +961,6 @@ export default function FollowUpsPage() {
                             </div>
                             
                             <div className="space-y-2 mb-3">
-                              <a 
-                                href={`tel:${call.phone}`}
-                                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-                              >
-                                <Phone className="w-4 h-4" />
-                                <span>{call.phone}</span>
-                              </a>
-                              
                               <div className="flex items-center gap-2 text-sm text-gray-600">
                                 <Calendar className="w-4 h-4 text-gray-400" />
                                 <span>Scheduled: {formatDate(call.callDate)} at {call.callTime}</span>
@@ -1035,7 +976,7 @@ export default function FollowUpsPage() {
                             
                             <button
                               onClick={async () => {
-                                await handleMarkAsCalled(call.phone, call.callDate);
+                                await handleMarkAsCalled(call.name, call.callDate);
                                 // Refresh the pending calls list
                                 const response = await fetch("/api/followups/pending");
                                 const data = await response.json();

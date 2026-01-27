@@ -55,6 +55,8 @@ export async function GET(_req: NextRequest) {
     // Process each customer's purchase history
     for (const row of rows) {
       // Column G (index 6) is Purchase History JSON
+      // MasterCustomers: 0: Customer Name, 1: Normalized Shop Name, 2: Address, 3: Total Purchase Count,
+      // 4: Total Amount Spent, 5: Last Purchase Date, 6: Purchase History, 7: Flag, 8: Last Modified
       const purchaseHistoryJson = (row[6] || "[]").toString();
 
       let purchaseHistory: PurchaseHistoryEntry[] = [];
