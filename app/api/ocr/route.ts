@@ -214,70 +214,60 @@ export async function POST(req: NextRequest) {
     }
 
 const prompt = `
-You are a robotic Document Parsing Engine. Your goal is 100% precision.
-**CRITICAL RULE: STRICT ROW ISOLATION.**
-Treat each row as a strictly horizontal line. **NEVER** look up or down to find missing values.
+You are a High-Precision Optical Character Recognition (OCR) Engine specialized in handwritten tabular data. 
+Your extraction must be pixel-perfect.
 
-### 1. THE "HORIZONTAL LOCK" STRATEGY
-- **Visualize a ruler** placed under each handwritten row. You must stay ABOVE that ruler.
-- **The "Greedy Search" Ban:** If a specific cell (like "REP") appears empty on the current line, **STOP**. Do NOT scan strictly downwards to find a number from the next row.
-  - *Bad Behavior:* "Row 5 REP is empty... oh, but Row 6 has a '2', I'll take that." -> **FORBIDDEN.**
-  - *Correct Behavior:* "Row 5 REP is empty. Output: 0."
-- **Line Consistency:** The "Customer Name" (Col 1), "Price" (Col 3), and "Sale" (Col 6) MUST all be on the exact same vertical Y-axis level.
+### CORE OPERATING RULES (STRICT):
+1.  **THE "ANCHOR" STRATEGY:** - Locate the **"PRICE"** column (usually values like 65, 70, 90). This is your central anchor for every row.
+    - Everything to the **LEFT** of the Price is text (Name, Address).
+    - Everything to the **RIGHT** of the Price is the numeric data (Samp, Rep, Sale).
+    
+2.  **THE "INVISIBLE WALL" (CRITICAL):**
+    - Draw an imaginary horizontal line immediately below the text of the current row. 
+    - You are FORBIDDEN from crossing this line to find data.
+    - If the "REP" or "SAMP" column space is blank on the current row's Y-axis, the value is **"0"**.
+    - **FAILURE CASE TO AVOID:** Do not look at the row below to fill a blank space. If Row 5 is blank, and Row 6 has a '2', Row 5 must be "0".
 
-### 2. HEADER EXTRACTION (Top Left)
-**The date format may vary (e.g., "03.01.2026" or "03/01/2026" or "03-01-2026").**
-1.  **Locate:** Find the label "DATE" in the top-left area.
-2.  **Extract:** Read the value next to it, ignoring the separator style (dots/slashes/dashes).
-3.  **Standardize:** Convert whatever you read into **DD-MM-YYYY** format for the JSON output.
-    - *Input Example:* "03.01.2026" -> Output: "03-01-2026"
-    - *Input Example:* "03/01/2026" -> Output: "03-01-2026"
-- **Date:** Extract "DATE" value 
-- **Packets:** "BAL PKT", "NEW PKT", "TOTAL PKT".
+3.  **STRICT COLUMN DEFINITIONS:**
+    - **Col 1 (Shop Name):** Text.
+    - **Col 2 (Address):** Text.
+    - **Col 3 (Price):** The Anchor Number (e.g., 65).
+    - **Col 4 (Samp Qty):** Immediate right of Price. Often blank. Default to "0".
+    - **Col 5 (Rep Qty):** Right of Samp. Often blank. Default to "0".
+    - **Col 6 (Sale Qty):** Right of Rep. The main sale number.
+    - **Col 7 (Cash Amt):** Currency value.
+    - **Col 8 (Bal Amt):** Currency value.
+    - **Col 9 (Delivery Person):** Text (e.g., Pushpa, Sachin).
+    - **Col 10 (Follow Up Date):** Text/Date.
 
-### 3. COLUMN MAPPING (Left-to-Right Scan)
-*Scan strictly left-to-right. Do not cross horizontal lines.*
+### HEADER EXTRACTION:
+- Extract "DATE" from top left. Convert to format: **DD-MM-YYYY** (e.g., change "03.01.2026" to "03-01-2026").
+- Extract "BAL PKT", "NEW PKT", "TOTAL PKT".
 
-1. **SHOP NAME**: Text.
-2. **ADDRESS**: Text.
-3. **PRICE**: Number (The Anchor).
-   --- THE DANGER ZONE (Narrow Columns) ---
-   *Look strictly to the right of PRICE on the SAME text line:*
-4. **SAMP**: Number. (Immediate right of Price).
-5. **REP**: Number. (Middle column). **CRITICAL:** If blank, write "0". Do NOT look at the row below.
-6. **SALE**: Number. (Right column).
-   ----------------------------------------
-7. **CASH**: Number.
-8. **BAL**: Number.
-9. **DELIVERY**: Text.
-10. **FOLLOW UP**: Text.
+### OUTPUT FORMAT (JSON ONLY):
+Return strictly valid JSON. No markdown formatting, no explanations.
 
-### 4. DATA SANITY CHECKS
-- **Blank means Blank:** If a cell has no ink, the value is "0" (for numbers) or "" (for text).
-- **No Drifting:** If "Ravi Kirana" is on line 4, and "Price 65" is on line 4, you CANNOT pick a "Sale" value from line 5.
-
-### 5. OUTPUT JSON
 {
-  "top": {
-    "date": "",
-    "balPkt": "",
-    "newPkt": "",
-    "totalPkt": ""
-  },
-  "items": [
-    {
-      "shopName": "",
-      "address": "",
-      "packetPrice": "",
-      "samp": "0",
-      "rep": "0",       // MUST be from the same row as shopName
-      "sale": "0",      // MUST be from the same row as shopName
-      "cashAmount": "0",
-      "balanceAmount": "0",
-      "delPerson": "",
-      "followUpsDate": ""
-    }
-  ]
+  "header": {
+    "date": "string (DD-MM-YYYY)",
+    "bal_pkt": "number",
+    "new_pkt": "number",
+    "total_pkt": "number"
+  },
+  "rows": [
+    {
+      "shop_name": "string",
+      "address": "string",
+      "price": "number",
+      "samp_qty": "number (default 0)",
+      "rep_qty": "number (default 0)",
+      "sale_qty": "number (default 0)",
+      "cash_amt": "number",
+      "bal_amt": "number",
+      "delivery_person": "string",
+      "follow_up_date": "string or null"
+    }
+  ]
 }
 `;
     const requestBody = {
