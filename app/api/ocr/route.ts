@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = "gemini-3-pro-preview"; 
+const MODEL = "gemini-2.5-pro"; 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
 function cleanNumber(val: any): number {
