@@ -214,60 +214,61 @@ export async function POST(req: NextRequest) {
     }
 
 const prompt = `
-You are a High-Precision Optical Character Recognition (OCR) Engine specialized in handwritten tabular data. 
+You are a High-Precision Optical Character Recognition (OCR) Engine specialized in handwritten tabular data. 
 Your extraction must be pixel-perfect.
 
 ### CORE OPERATING RULES (STRICT):
-1.  **THE "ANCHOR" STRATEGY:** - Locate the **"PRICE"** column (usually values like 65, 70, 90). This is your central anchor for every row.
-    - Everything to the **LEFT** of the Price is text (Name, Address).
-    - Everything to the **RIGHT** of the Price is the numeric data (Samp, Rep, Sale).
-    
-2.  **THE "INVISIBLE WALL" (CRITICAL):**
-    - Draw an imaginary horizontal line immediately below the text of the current row. 
-    - You are FORBIDDEN from crossing this line to find data.
-    - If the "REP" or "SAMP" column space is blank on the current row's Y-axis, the value is **"0"**.
-    - **FAILURE CASE TO AVOID:** Do not look at the row below to fill a blank space. If Row 5 is blank, and Row 6 has a '2', Row 5 must be "0".
+1.  **THE "ANCHOR" STRATEGY:** - Locate the "PRICE" column (usually values like 65, 70, 90). This is your central anchor for every row.
+    - Everything to the LEFT of the Price is text (Name, Address).
+    - Everything to the RIGHT of the Price is the numeric data (Samp, Rep, Sale).
+    
+2.  **THE "INVISIBLE WALL" (CRITICAL):**
+    - Draw an imaginary horizontal line immediately below the text of the current row. 
+    - You are FORBIDDEN from crossing this line to find data.
+    - If the "REP" or "SAMP" column space is blank on the current row's Y-axis, the value is "0".
+    - **FAILURE CASE TO AVOID:** Do not look at the row below to fill a blank space. If Row 5 is blank, and Row 6 has a '2', Row 5 must be "0".
 
-3.  **STRICT COLUMN DEFINITIONS:**
-    - **Col 1 (Shop Name):** Text.
-    - **Col 2 (Address):** Text.
-    - **Col 3 (Price):** The Anchor Number (e.g., 65).
-    - **Col 4 (Samp Qty):** Immediate right of Price. Often blank. Default to "0".
-    - **Col 5 (Rep Qty):** Right of Samp. Often blank. Default to "0".
-    - **Col 6 (Sale Qty):** Right of Rep. The main sale number.
-    - **Col 7 (Cash Amt):** Currency value.
-    - **Col 8 (Bal Amt):** Currency value.
-    - **Col 9 (Delivery Person):** Text (e.g., Pushpa, Sachin).
-    - **Col 10 (Follow Up Date):** Text/Date.
+3.  **STRICT COLUMN DEFINITIONS (Left-to-Right):**
+    - **shopName:** Text (Customer/Shop Name).
+    - **address:** Text.
+    - **packetPrice:** The Anchor Number (from PRICE column).
+    - **samp:** Immediate right of Price. Default "0".
+    - **rep:** Right of Samp. Default "0".
+    - **sale:** Right of Rep.
+    - **cashAmount:** From the CASH AMT column.
+    - **balanceAmount:** From the BAL AMT column.
+    - **delPerson:** Text (Delivery Person).
+    - **followUpsDate:** Any text in the Follow Up column.
 
 ### HEADER EXTRACTION:
-- Extract "DATE" from top left. Convert to format: **DD-MM-YYYY** (e.g., change "03.01.2026" to "03-01-2026").
-- Extract "BAL PKT", "NEW PKT", "TOTAL PKT".
+- Extract "DATE" from top left. Convert to format: **DD-MM-YYYY**.
+- Extract "BAL PKT" as **balPkt**, "NEW PKT" as **newPkt**, "TOTAL PKT" as **totalPkt**.
 
 ### OUTPUT FORMAT (JSON ONLY):
-Return strictly valid JSON. No markdown formatting, no explanations.
+Return strictly valid JSON. No markdown formatting, no explanations. 
+Match these keys exactly so the parser does not fail:
 
 {
-  "header": {
-    "date": "string (DD-MM-YYYY)",
-    "bal_pkt": "number",
-    "new_pkt": "number",
-    "total_pkt": "number"
-  },
-  "rows": [
-    {
-      "shop_name": "string",
-      "address": "string",
-      "price": "number",
-      "samp_qty": "number (default 0)",
-      "rep_qty": "number (default 0)",
-      "sale_qty": "number (default 0)",
-      "cash_amt": "number",
-      "bal_amt": "number",
-      "delivery_person": "string",
-      "follow_up_date": "string or null"
-    }
-  ]
+  "top": {
+    "date": "string (DD-MM-YYYY)",
+    "balPkt": "number",
+    "newPkt": "number",
+    "totalPkt": "number"
+  },
+  "items": [
+    {
+      "shopName": "string",
+      "address": "string",
+      "packetPrice": "number",
+      "samp": "number",
+      "rep": "number",
+      "sale": "number",
+      "cashAmount": "number",
+      "balanceAmount": "number",
+      "delPerson": "string",
+      "followUpsDate": "string or null"
+    }
+  ]
 }
 `;
     const requestBody = {
