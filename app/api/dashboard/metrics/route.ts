@@ -9,7 +9,6 @@ type PurchaseHistoryEntry = {
 
 type CustomerRow = {
   name: string;
-  phone: string;
   address: string;
   purchaseCount: number;
   totalAmountSpent: number;
@@ -54,6 +53,15 @@ type DashboardResponse = {
   returnExpense: number;
   netRevenue: number;
   totalBalanceAmount: number;
+  expenseByDate?: Array<{
+    date: string;
+    totalExpenses: number;
+    rawMaterial: number;
+    electricity: number;
+    labor: number;
+    godownRent: number;
+    petrolFuel: number;
+  }>;
 };
 
 // ==================== Helper Functions ====================
@@ -186,7 +194,9 @@ const loadCustomers = async (
 
     const customers: CustomerRow[] = rows.map((row) => {
       const name = (row[0] || "").toString().trim();
-      const phone = (row[1] || "").toString().trim();
+      // Updated column indices for MasterCustomers:
+      // 0: Customer Name, 1: Normalized Shop Name, 2: Address, 3: Total Purchase Count,
+      // 4: Total Amount Spent, 5: Last Purchase Date, 6: Purchase History, 7: Flag, 8: Last Modified
       const address = (row[2] || "").toString().trim();
       const purchaseCount = Number(row[3] || 0) || 0;
       const totalAmountSpent = Number(row[4] || 0) || 0;
@@ -197,7 +207,6 @@ const loadCustomers = async (
 
       return {
         name,
-        phone,
         address,
         purchaseCount,
         totalAmountSpent,
@@ -323,7 +332,7 @@ const computeCustomerInsights = (customers: CustomerRow[]) => {
 
 // ==================== Route Handler ====================
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
     const spreadsheetId =
       process.env.GOOGLE_SPREADSHEET_ID ||
@@ -333,13 +342,19 @@ export async function GET(_req: NextRequest) {
       throw new Error("GOOGLE_SPREADSHEET_ID is not configured");
     }
 
+    // Get optional date filters from query params (DD-MM-YYYY format)
+    const { searchParams } = new URL(req.url);
+    const singleDate = searchParams.get("date") || undefined;
+    const filterStartDate = searchParams.get("startDate") || singleDate || undefined;
+    const filterEndDate = searchParams.get("endDate") || singleDate || undefined;
+
     const sheets = getSheetsClient();
 
     // Load customers from MasterCustomers sheet ONLY
     const customers = await loadCustomers(sheets, spreadsheetId);
 
-    // Get financial metrics from daily sheets
-    const dailyMetrics = await getAllDailyBillsForMetrics();
+    // Get financial metrics from daily sheets (with optional date filter)
+    const dailyMetrics = await getAllDailyBillsForMetrics(filterStartDate, filterEndDate);
 
     // 1. totalCustomers = number of rows (excluding header)
     const totalCustomers = customers.length;
@@ -359,8 +374,9 @@ export async function GET(_req: NextRequest) {
     // 6. Return Expense = SUM of Return Amounts from daily sheets
     const returnExpense = dailyMetrics.totalReturnAmount;
 
-    // 7. Net Revenue = Total Sales - Sample Expense - Return Expense
-    const netRevenue = totalSales - sampleExpense - returnExpense;
+    // 7. Net Revenue = Total Sales - Sample Expense - Return Expense - Total Expenses
+    const totalExpenses = dailyMetrics.totalExpenses;
+    const netRevenue = totalSales - sampleExpense - returnExpense - totalExpenses;
 
     // 8. Total Balance Amount = SUM of Balance Amounts from daily sheets
     const totalBalanceAmount = dailyMetrics.totalBalanceAmount;
@@ -394,7 +410,7 @@ export async function GET(_req: NextRequest) {
       },
     ];
 
-    const response: DashboardResponse = {
+    const response = {
       totalCustomers,
       totalSales: Math.round(totalSales),
       totalOrders,
@@ -412,6 +428,19 @@ export async function GET(_req: NextRequest) {
       returnExpense: Math.round(returnExpense),
       netRevenue: Math.round(netRevenue),
       totalBalanceAmount: Math.round(totalBalanceAmount),
+      // New expense fields
+      totalExpenses: Math.round(totalExpenses),
+      expenseBreakdown: {
+        rawMaterialExpense: Math.round(dailyMetrics.rawMaterialExpense),
+        electricityExpense: Math.round(dailyMetrics.electricityExpense),
+        laborCharges: Math.round(dailyMetrics.laborCharges),
+        godownRent: Math.round(dailyMetrics.godownRent),
+        petrolFuelCharges: Math.round(dailyMetrics.petrolFuelCharges),
+      },
+      expenseByDate: dailyMetrics.expenseByDate || [],
+      filterDate: singleDate || null,
+      filterStartDate: filterStartDate || null,
+      filterEndDate: filterEndDate || null,
     };
 
     console.log("[Dashboard] ✅ Metrics calculated:", {
@@ -420,8 +449,12 @@ export async function GET(_req: NextRequest) {
       totalOrders,
       sampleExpense: Math.round(sampleExpense),
       returnExpense: Math.round(returnExpense),
+      totalExpenses: Math.round(totalExpenses),
       netRevenue: Math.round(netRevenue),
       totalBalanceAmount: Math.round(totalBalanceAmount),
+      filterDate: singleDate || "all",
+      filterStartDate: filterStartDate || "all",
+      filterEndDate: filterEndDate || "all",
     });
 
     return NextResponse.json(response);

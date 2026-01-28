@@ -9,11 +9,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Validate required fields
-    if (!body.name || !body.phone || !body.callDate || !body.callTime) {
+    // Validate required fields (now uses name instead of phone as unique identifier)
+    if (!body.name || !body.callDate || !body.callTime) {
       return NextResponse.json(
         {
-          error: "Missing required fields: name, phone, callDate, callTime",
+          error: "Missing required fields: name, callDate, callTime",
         },
         { status: 400 }
       );
@@ -25,7 +25,6 @@ export async function POST(req: NextRequest) {
     // Save the follow-up
     const result = await saveCallFollowUp({
       name: String(body.name).trim(),
-      phone: String(body.phone).trim(),
       callDate: String(body.callDate).trim(),
       callTime: String(body.callTime).trim(),
       notes: body.notes ? String(body.notes).trim() : "",
@@ -36,7 +35,7 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error: "Duplicate call reminder",
-          message: "A call reminder with the same phone, date, and time already exists",
+          message: "A call reminder with the same shop name, date, and time already exists",
         },
         { status: 409 }
       );

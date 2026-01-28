@@ -94,12 +94,12 @@ export async function GET(_req: NextRequest) {
         const rows = response.data.values || [];
         if (rows.length < 2) continue; // Skip if no data rows
 
-        // Sum Sale Amount column (column H, index 7)
-        // New structure: Date, Shop Name, Phone, Packet Price, Sale Qty, Sample Qty, Return Qty, Sale Amount, Sample Amount, Return Amount, Shift, Address, Rep, Delivery Person
+        // Sum Sale Amount column (column G, index 6)
+        // New structure: Date, Shop Name, Packet Price, Sale Qty, Sample Qty, Return Qty, Sale Amount, Sample Amount, Return Amount, Shift, Address, Rep, Delivery Person, PaymentStatus, BalanceAmount
         let dailyTotal = 0;
         for (let i = 1; i < rows.length; i++) {
-          // Try new structure first (Sale Amount at index 7)
-          const saleAmount = parseFloat((rows[i][7] || "0").toString().replace(/[^\d.-]/g, "")) || 0;
+          // Sale Amount at index 6 (after removing phone column)
+          const saleAmount = parseFloat((rows[i][6] || "0").toString().replace(/[^\d.-]/g, "")) || 0;
           dailyTotal += saleAmount;
         }
 

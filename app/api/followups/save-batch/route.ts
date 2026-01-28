@@ -19,12 +19,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate each call
+    // Validate each call (now uses name as unique identifier instead of phone)
     for (const call of calls) {
-      if (!call.name || !call.phone || !call.callDate || !call.callTime) {
+      if (!call.name || !call.callDate || !call.callTime) {
         return NextResponse.json(
           {
-            error: "Each call must have: name, phone, callDate, callTime",
+            error: "Each call must have: name, callDate, callTime",
           },
           { status: 400 }
         );
@@ -38,7 +38,6 @@ export async function POST(req: NextRequest) {
     const result = await batchSaveCallFollowUps(
       calls.map((call) => ({
         name: String(call.name).trim(),
-        phone: String(call.phone).trim(),
         callDate: String(call.callDate).trim(),
         callTime: String(call.callTime).trim(),
         notes: call.notes ? String(call.notes).trim() : "",

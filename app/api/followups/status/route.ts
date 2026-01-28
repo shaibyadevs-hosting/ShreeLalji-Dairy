@@ -6,11 +6,11 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Validate required fields
-    if (!body.phone || !body.callDate) {
+    // Validate required fields (now uses shopName instead of phone)
+    if (!body.shopName || !body.callDate) {
       return NextResponse.json(
         {
-          error: "Missing required fields: phone, callDate",
+          error: "Missing required fields: shopName, callDate",
         },
         { status: 400 }
       );
@@ -18,7 +18,7 @@ export async function PUT(req: NextRequest) {
 
     // Update status
     await updateCallStatus(
-      String(body.phone).trim(),
+      String(body.shopName).trim(),
       String(body.callDate).trim()
     );
 

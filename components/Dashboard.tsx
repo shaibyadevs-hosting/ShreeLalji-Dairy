@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, JSX } from "react";
 import {
   LineChart,
   Line,
@@ -25,8 +25,6 @@ import {
   RefreshCw,
   ChevronLeft,
   BarChart3,
-  Grid3x3,
-  Phone,
   Calendar,
   Clock,
   ShoppingBag,
@@ -44,7 +42,8 @@ import {
   RotateCcw,
   Crown,
   CalendarDays,
-  ExternalLink
+  ExternalLink,
+  Wallet
 } from "lucide-react";
 
 type ViewMode = "chart" | "grid" | "delivery" | "customers";
@@ -68,7 +67,7 @@ type AvgOrderTrend = {
 
 type TodayFollowUp = {
   name: string;
-  phone: string;
+  normalizedShopName: string;
   callTime: string;
   callDate: string;
   notes?: string;
@@ -94,11 +93,13 @@ type DeliverySummaryData = {
 
 type CustomerRecord = {
   shopName: string;
-  phone: string;
+  normalizedShopName?: string;
   totalSale: number;
   visitCount: number;
   sampleQty: number;
+  sampleAmount: number;
   returnQty: number;
+  returnAmount: number;
   dates: string[];
   address?: string;
 };
@@ -116,6 +117,7 @@ type CustomerInsightsData = {
   topBuyers: CustomerRecord[];
   selectedDate: string;
   totalCustomersAllTime: number;
+  totalReturnQty?: number;
 };
 
 type RepeatFilter = "2x" | "3x" | "4+";
@@ -123,7 +125,7 @@ type RepeatFilter = "2x" | "3x" | "4+";
 // Today's Delivery List Types
 type DeliveryShop = {
   shopName: string;
-  phone: string;
+  normalizedShopName?: string;
   address: string;
   saleQty: number;
   saleAmount: number;
@@ -157,6 +159,21 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Main dashboard date filter
+  const [dashboardStartDate, setDashboardStartDate] = useState<string>(""); // DD-MM-YYYY
+  const [dashboardEndDate, setDashboardEndDate] = useState<string>(""); // DD-MM-YYYY
+  const [dashboardDateLabel, setDashboardDateLabel] = useState<string>("All Time");
+
+  const updateDateLabel = (start: string, end: string) => {
+    if (start && end) {
+      setDashboardDateLabel(`${start} to ${end}`);
+    } else if (start) {
+      setDashboardDateLabel(`From ${start}`);
+    } else {
+      setDashboardDateLabel("All Time");
+    }
+  };
+
   // Delivery view filters and sorting
   const [deliverySearch, setDeliverySearch] = useState("");
   const [deliverySortBy, setDeliverySortBy] = useState<"name" | "orders" | "sale" | "cash">("orders");
@@ -183,10 +200,34 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
   const [deliveryListShift, setDeliveryListShift] = useState<"Morning" | "Evening">("Morning");
   const [deliveryListSearch, setDeliveryListSearch] = useState("");
   const [expandedDeliveryPersons, setExpandedDeliveryPersons] = useState<Set<string>>(new Set());
+  const [showExpenseBreakdown, setShowExpenseBreakdown] = useState(false);
 
   useEffect(() => {
     fetchAllData();
   }, []);
+
+  // Refetch metrics when date range changes
+  useEffect(() => {
+    fetchMetricsWithDateRange(dashboardStartDate, dashboardEndDate);
+  }, [dashboardStartDate, dashboardEndDate]);
+
+  async function fetchMetricsWithDateRange(startDate: string, endDate: string) {
+    try {
+      const params = new URLSearchParams();
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
+      params.set("_", Date.now().toString()); // bust cache
+      const url = params.toString() 
+        ? `/api/dashboard/metrics?${params.toString()}` 
+        : "/api/dashboard/metrics";
+      const metricsResponse = await fetch(url, { cache: "no-store" });
+      if (!metricsResponse.ok) throw new Error("Failed to fetch dashboard metrics");
+      const metricsData = await metricsResponse.json();
+      setMetrics(metricsData);
+    } catch (err: any) {
+      console.error("[Dashboard] Error fetching metrics:", err);
+    }
+  }
 
   async function fetchAllData() {
     try {
@@ -194,7 +235,14 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       console.log("[Dashboard] Fetching all data...");
 
       // Fetch main metrics
-      const metricsResponse = await fetch("/api/dashboard/metrics");
+      const metricsParams = new URLSearchParams();
+      if (dashboardStartDate) metricsParams.set("startDate", dashboardStartDate);
+      if (dashboardEndDate) metricsParams.set("endDate", dashboardEndDate);
+      metricsParams.set("_", Date.now().toString()); // bust cache
+      const metricsUrl = metricsParams.toString()
+        ? `/api/dashboard/metrics?${metricsParams.toString()}`
+        : "/api/dashboard/metrics";
+      const metricsResponse = await fetch(metricsUrl, { cache: "no-store" });
       if (!metricsResponse.ok) throw new Error("Failed to fetch dashboard metrics");
       const metricsData = await metricsResponse.json();
       setMetrics(metricsData);
@@ -248,9 +296,11 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
     try {
       setCustomerInsightsLoading(true);
       const dateParam = date || customerSelectedDate;
-      const response = await fetch(`/api/dashboard/customer-insights?date=${dateParam}`);
+      console.log("[Dashboard] Fetching customer insights for date:", dateParam);
+      const response = await fetch(`/api/dashboard/customer-insights?date=${encodeURIComponent(dateParam)}`);
       if (response.ok) {
         const data = await response.json();
+        console.log("[Dashboard] Customer insights received:", data);
         setCustomerInsights(data);
       }
     } catch (err) {
@@ -321,7 +371,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
         ...group,
         shops: group.shops.filter(shop => 
           shop.shopName.toLowerCase().includes(search) ||
-          shop.phone.includes(search) ||
           shop.address.toLowerCase().includes(search)
         )
       }))
@@ -348,7 +397,15 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
     return `₹${value}`;
   };
 
-  const kpiCards = [
+  const kpiCards: Array<{
+    title: string;
+    value: string;
+    change: string;
+    color: string;
+    icon: JSX.Element;
+    gradient: string;
+    onClick?: () => void;
+  }> = [
     {
       title: "Total Customers",
       value: metrics?.totalCustomers?.toString() || "0",
@@ -367,7 +424,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
     },
     {
       title: "Sample Expense",
-      value: formatCurrency((metrics as any)?.sampleExpense || 0),
+      value: formatCurrency(metrics?.sampleExpense || 0),
       change: "",
       color: "from-orange-500 to-orange-600",
       icon: <ShoppingBag className="w-5 h-5 text-white" />,
@@ -375,28 +432,28 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
     },
     {
       title: "Return Expense",
-      value: formatCurrency((metrics as any)?.returnExpense || 0),
+      value: formatCurrency(metrics?.returnExpense || 0),
       change: "",
       color: "from-red-500 to-red-600",
       icon: <Target className="w-5 h-5 text-white" />,
       gradient: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
     },
     {
+      title: "Total Expenses",
+      value: formatCurrency(metrics?.totalExpenses || 0),
+      change: "",
+      color: "from-amber-500 to-amber-600",
+      icon: <Wallet className="w-5 h-5 text-white" />,
+      gradient: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+      onClick: () => setShowExpenseBreakdown((prev) => !prev),
+    },
+    {
       title: "Net Revenue",
-      value: formatCurrency((metrics as any)?.netRevenue || 0),
+      value: formatCurrency(metrics?.netRevenue || 0),
       change: "",
       color: "from-purple-500 to-purple-600",
       icon: <TrendingUp className="w-5 h-5 text-white" />,
       gradient: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
-    },
-   
-    {
-      title: "Avg Order Value",
-      value: formatCurrency(metrics?.avgOrderValue || 0),
-      change: "",
-      color: "from-cyan-500 to-cyan-600",
-      icon: <TrendingUp className="w-5 h-5 text-white" />,
-      gradient: "linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)",
     },
   ];
 
@@ -533,6 +590,62 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
           </div>
         </div>
         <div className="flex flex-wrap gap-3">
+          {/* Date Filter */}
+          <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm border border-gray-200 px-3 py-1.5">
+            <Calendar className="w-4 h-4 text-gray-500" />
+            <input
+              type="date"
+              value={dashboardStartDate ? `${dashboardStartDate.split('-')[2]}-${dashboardStartDate.split('-')[1]}-${dashboardStartDate.split('-')[0]}` : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val) {
+                  const [year, month, day] = val.split('-');
+                  const formatted = `${day}-${month}-${year}`;
+                  setDashboardStartDate(formatted);
+                  updateDateLabel(formatted, dashboardEndDate);
+                } else {
+                  setDashboardStartDate("");
+                  updateDateLabel("", dashboardEndDate);
+                }
+              }}
+              className="border-none outline-none text-sm text-gray-700 bg-transparent w-32"
+              aria-label="Start date"
+            />
+            <span className="text-gray-400 text-sm">to</span>
+            <input
+              type="date"
+              value={dashboardEndDate ? `${dashboardEndDate.split('-')[2]}-${dashboardEndDate.split('-')[1]}-${dashboardEndDate.split('-')[0]}` : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val) {
+                  const [year, month, day] = val.split('-');
+                  const formatted = `${day}-${month}-${year}`;
+                  setDashboardEndDate(formatted);
+                  updateDateLabel(dashboardStartDate, formatted);
+                } else {
+                  setDashboardEndDate("");
+                  updateDateLabel(dashboardStartDate, "");
+                }
+              }}
+              className="border-none outline-none text-sm text-gray-700 bg-transparent w-32"
+              aria-label="End date"
+            />
+            {(dashboardStartDate || dashboardEndDate) && (
+              <button
+                onClick={() => {
+                  setDashboardStartDate("");
+                  setDashboardEndDate("");
+                  updateDateLabel("", "");
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <span className="flex items-center text-sm text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
+            {dashboardDateLabel}
+          </span>
           <button
             onClick={fetchAllData}
             className="px-4 py-2.5 bg-white rounded-lg shadow-sm hover:shadow-md transition-all border border-gray-200 text-gray-700 font-medium flex items-center gap-2 hover:bg-gray-50"
@@ -558,17 +671,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
             >
               <BarChart3 className="w-4 h-4" />
               Chart View
-            </button>
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`px-4 py-2 rounded-md flex items-center gap-2 transition-all ${
-                viewMode === "grid"
-                  ? "bg-blue-50 text-blue-600"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
-            >
-              <Grid3x3 className="w-4 h-4" />
-              Grid View
             </button>
             <button
               onClick={() => setViewMode("delivery")}
@@ -602,7 +704,8 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
         {kpiCards.map((card, idx) => (
           <div
             key={idx}
-            className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-shadow duration-300"
+            className={`bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-shadow duration-300 ${card.onClick ? "cursor-pointer" : ""}`}
+            onClick={card.onClick}
           >
             <div className="p-6">
               <div className="flex justify-between items-start mb-4">
@@ -633,290 +736,58 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
       </div>
       )}
 
-      {viewMode === "chart" && (
-        // Chart View
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Monthly Sales Trend */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-800">Monthly Sales Trend</h3>
-              <span className="text-sm text-gray-500">Last 6 months</span>
+      {showExpenseBreakdown && viewMode !== "delivery" && viewMode !== "customers" && (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-100 mb-8">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">Date-wise Expenses</h3>
+              <p className="text-sm text-gray-500">Tap Total Expenses card again to hide</p>
             </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={salesData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="month" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280' }}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                <Legend />
-                <Line
-                    type="monotone"
-                    dataKey="sales"
-                    stroke="#3b82f6"
-                    strokeWidth={3}
-                    dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6 }}
-                />
-                <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#10b981"
-                    strokeWidth={3}
-                    dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <button
+              onClick={() => setShowExpenseBreakdown(false)}
+              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
+            >
+              Close
+            </button>
           </div>
-          </div>
-
-          {/* Daily Sales Trend */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-800">Daily Sales Trend</h3>
-              <span className="text-sm text-gray-500">Last 30 days</span>
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailySales}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                <XAxis
-                    dataKey="date" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280', fontSize: 12 }}
-                />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280' }}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="revenue" 
-                    fill="url(#colorRevenue)" 
-                    radius={[4, 4, 0, 0]}
-                  />
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.2}/>
-                    </linearGradient>
-                  </defs>
-              </BarChart>
-            </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Customer Distribution */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-800">Customer Distribution</h3>
-              <Target className="w-5 h-5 text-gray-400" />
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                    data={repeatVsNewData}
-                    cx="50%"
-                    cy="50%"
-                  labelLine={false}
-                    label={({ name, percent }) => 
-                      `${name}: ${((percent || 0) * 100).toFixed(0)}%`
-                  }
-                  outerRadius={80}
-                    innerRadius={50}
-                    fill="#8884d8"
-                    dataKey="value"
-                >
-                    {repeatVsNewData.map((_, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                        fill={index === 0 ? "#3b82f6" : "#8b5cf6"}
-                        stroke="#fff"
-                        strokeWidth={2}
-                    />
-                  ))}
-                </Pie>
-                  <Tooltip 
-                    formatter={(value) => [`${value} customers`, 'Count']}
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-              </PieChart>
-            </ResponsiveContainer>
-            </div>
-            <div className="flex justify-center gap-8 mt-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                <span className="text-sm text-gray-600">Repeat Customers</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                <span className="text-sm text-gray-600">New Customers</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Avg Order Value Trend */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-800">Average Order Value Trend</h3>
-              <span className="text-sm text-gray-500">Monthly</span>
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={avgOrderTrend}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="month" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280' }}
-                  />
-                  <YAxis 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fill: '#6b7280' }}
-                  />
-                  <Tooltip 
-                    formatter={(value) => [`₹${value}`, 'Avg Order']}
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="avgOrderValue"
-                    stroke="#f59e0b"
-                    strokeWidth={3}
-                    dot={{ fill: '#f59e0b', strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Expenses</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Raw Material</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Electricity</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Labor</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Godown Rent</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Petrol/Fuel</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {(metrics?.expenseByDate || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-4 text-sm text-gray-500 text-center">No expense data found</td>
+                  </tr>
+                ) : (
+                  (metrics?.expenseByDate || []).map((row, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-6 py-3 text-sm text-gray-800">{row.date}</td>
+                      <td className="px-6 py-3 text-sm font-semibold text-gray-900">{formatCurrency(row.totalExpenses || 0)}</td>
+                      <td className="px-6 py-3 text-sm text-gray-700">{formatCurrency(row.rawMaterial || 0)}</td>
+                      <td className="px-6 py-3 text-sm text-gray-700">{formatCurrency(row.electricity || 0)}</td>
+                      <td className="px-6 py-3 text-sm text-gray-700">{formatCurrency(row.labor || 0)}</td>
+                      <td className="px-6 py-3 text-sm text-gray-700">{formatCurrency(row.godownRent || 0)}</td>
+                      <td className="px-6 py-3 text-sm text-gray-700">{formatCurrency(row.petrolFuel || 0)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {viewMode === "grid" && (
-        // Grid View
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Top Customers Grid */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-800">Top Customers</h3>
-              <Users className="w-5 h-5 text-gray-400" />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-              <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="pb-3 text-left text-sm font-semibold text-gray-600">Customer</th>
-                    <th className="pb-3 text-right text-sm font-semibold text-gray-600">Purchases</th>
-                    <th className="pb-3 text-right text-sm font-semibold text-gray-600">Total Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                  {topCustomers.slice(0, 8).map((customer, idx) => (
-                    <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                      <td className="py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
-                            {customer.name.charAt(0)}
-                          </div>
-                          <span className="font-medium text-gray-800">{customer.name}</span>
-                        </div>
-                    </td>
-                      <td className="py-4 text-right">
-                        <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
-                          {customer.purchases} orders
-                        </span>
-                    </td>
-                      <td className="py-4 text-right font-semibold text-gray-800">
-                        ₹{(customer.total || 0).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          </div>
-
-          {/* Monthly Sales Grid */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-semibold text-gray-800">Monthly Sales Performance</h3>
-              <Calendar className="w-5 h-5 text-gray-400" />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-              <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="pb-3 text-left text-sm font-semibold text-gray-600">Month</th>
-                    <th className="pb-3 text-right text-sm font-semibold text-gray-600">Sales Count</th>
-                    <th className="pb-3 text-right text-sm font-semibold text-gray-600">Revenue</th>
-                    <th className="pb-3 text-right text-sm font-semibold text-gray-600">Growth</th>
-                </tr>
-              </thead>
-              <tbody>
-                {salesData.map((data, idx) => (
-                    <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                      <td className="py-4 font-medium text-gray-800">{data.month}</td>
-                      <td className="py-4 text-right">
-                        <span className="font-medium">{data.sales}</span>
-                    </td>
-                      <td className="py-4 text-right font-semibold text-green-600">
-                        ₹{(data.revenue || 0).toLocaleString()}
-                    </td>
-                      <td className="py-4 text-right">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          idx > 0 ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          {idx > 0 ? '+12%' : '-'}
-                        </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          </div>
-        </div>
-      )}
+      
 
       {/* Delivery View - Full dedicated section */}
       {viewMode === "delivery" && (
@@ -1233,7 +1104,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                 </select>
               </div>
               <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Search Shop/Phone/Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search Shop/Address</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
@@ -1360,12 +1231,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                                   <h4 className="font-semibold text-gray-800">{shop.shopName}</h4>
                                 </div>
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600 ml-8">
-                                  {shop.phone && (
-                                    <a href={`tel:${shop.phone}`} className="flex items-center gap-1 text-blue-600 hover:text-blue-700">
-                                      <Phone className="w-4 h-4" />
-                                      {shop.phone}
-                                    </a>
-                                  )}
                                   {shop.address && (
                                     <span className="flex items-center gap-1">
                                       <span className="text-gray-400">📍</span>
@@ -1401,7 +1266,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-              <Phone className="w-5 h-5 text-blue-500" />
+              <Calendar className="w-5 h-5 text-blue-500" />
               Follow-Up Calls Due Today
             </h3>
             <p className="text-sm text-gray-500 mt-1">
@@ -1420,7 +1285,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
         {todayFollowUps.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Phone className="w-8 h-8 text-gray-400" />
+              <Calendar className="w-8 h-8 text-gray-400" />
             </div>
             <h4 className="text-lg font-medium text-gray-600 mb-2">No calls scheduled</h4>
             <p className="text-gray-500">All follow-up calls are completed for today</p>
@@ -1439,7 +1304,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     </div>
                     <div>
                       <h4 className="font-semibold text-gray-800">{call.name}</h4>
-                      <p className="text-sm text-gray-500">{call.phone}</p>
                     </div>
                   </div>
                   <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-sm font-medium">
@@ -1450,12 +1314,12 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   <button 
                     onClick={async () => {
                       try {
-                        setMarkingCallId(`${call.phone}-${call.callDate}`);
+                        setMarkingCallId(`${call.name}-${call.callDate}`);
                         const response = await fetch("/api/followups/status", {
                           method: "PUT",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
-                            phone: call.phone,
+                            shopName: call.name,
                             callDate: call.callDate,
                           }),
                         });
@@ -1463,7 +1327,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                         if (response.ok) {
                           // Remove from the list
                           setTodayFollowUps(prev => prev.filter(c => 
-                            !(c.phone === call.phone && c.callDate === call.callDate)
+                            !(c.name === call.name && c.callDate === call.callDate)
                           ));
                         } else {
                           const error = await response.json();
@@ -1476,10 +1340,10 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                         setMarkingCallId(null);
                       }
                     }}
-                    disabled={markingCallId === `${call.phone}-${call.callDate}`}
+                    disabled={markingCallId === `${call.name}-${call.callDate}`}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {markingCallId === `${call.phone}-${call.callDate}` ? "Marking..." : "Mark as Called"}
+                    {markingCallId === `${call.name}-${call.callDate}` ? "Marking..." : "Mark as Called"}
                   </button>
                   <button 
                     onClick={() => {
@@ -1538,7 +1402,9 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     value={customerSelectedDate.split('-').reverse().join('-')}
                     onChange={(e) => {
                       const [year, month, day] = e.target.value.split('-');
-                      setCustomerSelectedDate(`${day}-${month}-${year}`);
+                      const newDate = `${day}-${month}-${year}`;
+                      console.log("[Dashboard] Date changed from", customerSelectedDate, "to", newDate);
+                      setCustomerSelectedDate(newDate);
                     }}
                     className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                   />
@@ -1583,7 +1449,9 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                 <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-xl p-4 text-white">
                   <RotateCcw className="w-6 h-6 mb-2 opacity-80" />
                   <p className="text-sm opacity-80">Returns</p>
-                  <p className="text-2xl font-bold">{customerInsights?.returnCustomers?.length || 0}</p>
+                  <p className="text-2xl font-bold">
+                    {customerInsights?.totalReturnQty ?? (customerInsights?.returnCustomers || []).reduce((sum, c) => sum + (c.returnQty || 0), 0)}
+                  </p>
                 </div>
                 <div className="bg-gradient-to-r from-amber-500 to-amber-600 rounded-xl p-4 text-white">
                   <Crown className="w-6 h-6 mb-2 opacity-80" />
@@ -1604,7 +1472,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {(customerInsights?.dateWiseCustomers || [])
-                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                       .length === 0 ? (
                       <div className="text-center py-10 text-gray-500">
                         No customers found for this date
@@ -1612,7 +1480,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     ) : (
                       <div className="divide-y divide-gray-100">
                         {(customerInsights?.dateWiseCustomers || [])
-                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                           .map((customer, idx) => (
                           <div key={idx} className="px-6 py-3 hover:bg-gray-50 flex justify-between items-center">
                             <div className="flex items-center gap-3">
@@ -1621,7 +1489,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                               </div>
                               <div>
                                 <p className="font-medium text-gray-800">{customer.shopName}</p>
-                                <p className="text-sm text-gray-500">{customer.phone}</p>
                               </div>
                             </div>
                             <div className="text-right">
@@ -1644,7 +1511,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {(customerInsights?.newCustomers || [])
-                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                       .length === 0 ? (
                       <div className="text-center py-10 text-gray-500">
                         No new customers today
@@ -1652,7 +1519,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     ) : (
                       <div className="divide-y divide-gray-100">
                         {(customerInsights?.newCustomers || [])
-                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                           .map((customer, idx) => (
                           <div key={idx} className="px-6 py-3 hover:bg-gray-50 flex justify-between items-center">
                             <div className="flex items-center gap-3">
@@ -1661,7 +1528,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                               </div>
                               <div>
                                 <p className="font-medium text-gray-800">{customer.shopName}</p>
-                                <p className="text-sm text-gray-500">{customer.phone}</p>
                               </div>
                             </div>
                             <div className="text-right">
@@ -1709,7 +1575,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                           : customerInsights?.repeatCustomers?.fourPlusTimes;
                       
                       const filtered = (repeatData || []).filter(c => 
-                        customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch)
+                        customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase())
                       );
                       
                       if (filtered.length === 0) {
@@ -1730,7 +1596,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                                 </div>
                                 <div>
                                   <p className="font-medium text-gray-800">{customer.shopName}</p>
-                                  <p className="text-sm text-gray-500">{customer.phone}</p>
                                 </div>
                               </div>
                               <div className="text-right">
@@ -1752,12 +1617,12 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-white">
                     <h4 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                       <Gift className="w-5 h-5 text-orange-500" />
-                      Sample Customers
+                      Sample Customers ({customerSelectedDate})
                     </h4>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {(customerInsights?.sampleCustomers || [])
-                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                       .length === 0 ? (
                       <div className="text-center py-10 text-gray-500">
                         No sample customers found
@@ -1765,7 +1630,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     ) : (
                       <div className="divide-y divide-gray-100">
                         {(customerInsights?.sampleCustomers || [])
-                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                           .map((customer, idx) => (
                           <div key={idx} className="px-6 py-3 hover:bg-gray-50 flex justify-between items-center">
                             <div className="flex items-center gap-3">
@@ -1774,11 +1639,15 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                               </div>
                               <div>
                                 <p className="font-medium text-gray-800">{customer.shopName}</p>
-                                <p className="text-sm text-gray-500">{customer.phone}</p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-semibold text-orange-600">{customer.sampleQty} samples</p>
+                              {customer.sampleQty > 0 && (
+                                <p className="font-semibold text-orange-600">{customer.sampleQty} samples</p>
+                              )}
+                              {customer.sampleAmount > 0 && (
+                                <p className="text-sm text-orange-500">₹{customer.sampleAmount.toLocaleString()}</p>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1792,12 +1661,12 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-red-50 to-white">
                     <h4 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                       <RotateCcw className="w-5 h-5 text-red-500" />
-                      Returns List
+                      Returns ({customerSelectedDate})
                     </h4>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {(customerInsights?.returnCustomers || [])
-                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                       .length === 0 ? (
                       <div className="text-center py-10 text-gray-500">
                         No returns found
@@ -1805,7 +1674,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     ) : (
                       <div className="divide-y divide-gray-100">
                         {(customerInsights?.returnCustomers || [])
-                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                           .map((customer, idx) => (
                           <div key={idx} className="px-6 py-3 hover:bg-gray-50 flex justify-between items-center">
                             <div className="flex items-center gap-3">
@@ -1814,11 +1683,15 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                               </div>
                               <div>
                                 <p className="font-medium text-gray-800">{customer.shopName}</p>
-                                <p className="text-sm text-gray-500">{customer.phone}</p>
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-semibold text-red-600">{customer.returnQty} returns</p>
+                              {customer.returnQty > 0 && (
+                                <p className="font-semibold text-red-600">{customer.returnQty} returns</p>
+                              )}
+                              {customer.returnAmount > 0 && (
+                                <p className="text-sm text-red-500">₹{customer.returnAmount.toLocaleString()}</p>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1832,12 +1705,12 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                   <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-amber-50 to-white">
                     <h4 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                       <Crown className="w-5 h-5 text-amber-500" />
-                      Top Buyers (All Time)
+                      Top Buyers ({customerSelectedDate})
                     </h4>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
                     {(customerInsights?.topBuyers || [])
-                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                      .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                       .length === 0 ? (
                       <div className="text-center py-10 text-gray-500">
                         No top buyers found
@@ -1845,7 +1718,7 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                     ) : (
                       <div className="divide-y divide-gray-100">
                         {(customerInsights?.topBuyers || [])
-                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone.includes(customerSearch))
+                          .filter(c => customerSearch === "" || c.shopName.toLowerCase().includes(customerSearch.toLowerCase()))
                           .map((customer, idx) => (
                           <div key={idx} className="px-6 py-3 hover:bg-gray-50 flex justify-between items-center">
                             <div className="flex items-center gap-3">
@@ -1859,7 +1732,6 @@ const Dashboard = ({ onBack }: { onBack: () => void }) => {
                               </div>
                               <div>
                                 <p className="font-medium text-gray-800">{customer.shopName}</p>
-                                <p className="text-sm text-gray-500">{customer.phone}</p>
                               </div>
                             </div>
                             <div className="text-right">

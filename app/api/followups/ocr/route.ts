@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const API_KEY = process.env.GEMINI_API_KEY || process.env.GEMINI_API;
-const MODEL = "gemini-3-flash-preview";
+const MODEL = "gemini-3-pro-preview";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
 /**
@@ -69,14 +69,6 @@ function normalizeTime(timeStr: string): string {
 }
 
 /**
- * Validate phone number (10 digits)
- */
-function isValidPhone(phone: string): boolean {
-  const digits = phone.replace(/\D/g, "");
-  return digits.length === 10;
-}
-
-/**
  * Validate date format (DD-MM-YYYY)
  */
 function isValidDate(dateStr: string): boolean {
@@ -137,7 +129,6 @@ TASK: Return ONLY valid JSON array:
 [
   {
     "name": "",
-    "phone": "",
     "callDate": "",
     "callTime": "",
     "notes": ""
@@ -148,16 +139,14 @@ IMPORTANT EXTRACTION RULES:
 1. Return ONLY JSON array, no explanation or metadata
 2. Extract ALL visible rows from the image
 3. For each row, extract:
-   - name: Customer/Person/shopname name
-   - phone: Phone/Mobile number (10 digits, remove spaces/dashes)
+   - name: Customer/Person/shopname name (REQUIRED - this is the unique identifier)
    - callDate: Date in DD-MM-YYYY format (or as written, we'll normalize)
    - callTime: Time in HH:mm format (24-hour format preferred)
    - notes: Any additional notes or comments (optional)
 4. If a field is missing or unclear, use empty string ""
-5. Phone numbers: Extract all digits, remove formatting
-6. Dates: Extract as written (DD/MM/YYYY, DD-MM-YYYY, etc.)
-7. Times: Extract in 24-hour format if possible (HH:mm)
-8. Return empty array [] if no valid data found
+5. Dates: Extract as written (DD/MM/YYYY, DD-MM-YYYY, etc.)
+6. Times: Extract in 24-hour format if possible (HH:mm)
+7. Return empty array [] if no valid data found
 `;
 
     const requestBody = {
@@ -258,19 +247,13 @@ IMPORTANT EXTRACTION RULES:
 
     for (const item of parsed) {
       const name = String(item.name || "").trim();
-      const phone = String(item.phone || "").replace(/\D/g, ""); // Remove non-digits
       const callDate = normalizeDate(String(item.callDate || ""));
       const callTime = normalizeTime(String(item.callTime || ""));
       const notes = String(item.notes || "").trim();
 
-      // Validate required fields
-      if (!name || !phone || !callDate || !callTime) {
-        invalidCalls.push({ ...item, reason: "Missing required fields" });
-        continue;
-      }
-
-      if (!isValidPhone(phone)) {
-        invalidCalls.push({ ...item, reason: "Invalid phone number (must be 10 digits)" });
+      // Validate required fields (name is the unique identifier now, not phone)
+      if (!name || !callDate || !callTime) {
+        invalidCalls.push({ ...item, reason: "Missing required fields (name, callDate, callTime)" });
         continue;
       }
 
@@ -286,7 +269,6 @@ IMPORTANT EXTRACTION RULES:
 
       validCalls.push({
         name,
-        phone,
         callDate,
         callTime,
         notes,

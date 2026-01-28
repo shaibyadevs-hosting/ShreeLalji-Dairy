@@ -1,12 +1,13 @@
 // app/api/dashboard/customer-insights/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSheetsClient } from "@/lib/googleSheets";
+import { normalizeShopName } from "@/lib/normalizeShopName";
 
 const SPREADSHEET_ID = "1OwmfDCO3AGBnHlViha2FPRySaGLPDPle106T0p3W-RA";
 
 type CustomerInsight = {
   shopName: string;
-  phone: string;
+  normalizedShopName: string;
   totalSale: number;
   visitCount: number;
   sampleQty: number;
@@ -63,16 +64,19 @@ export async function GET(req: NextRequest) {
 
         for (const row of rows) {
           const customerName = (row[1] || "").toString().trim();
-          const phone = (row[2] || "").toString().trim();
           
-          if (!customerName && !phone) continue;
+          if (!customerName) continue;
 
-          const key = phone || customerName.toLowerCase();
-          const saleAmount = parseFloat(row[7] || "0") || 0;
-          const sampleQty = parseFloat(row[5] || "0") || 0;
-          const sampleAmount = parseFloat(row[8] || "0") || 0;
-          const returnQty = parseFloat(row[6] || "0") || 0;
-          const returnAmount = parseFloat(row[9] || "0") || 0;
+          const key = normalizeShopName(customerName);
+          // Updated column indices after removing Phone column:
+          // 0: Date, 1: Shop Name, 2: Packet Price, 3: Sale Qty, 4: Sample Qty, 
+          // 5: Return Qty, 6: Total Amount, 7: Sample Amount, 8: Return Amount, 
+          // 9: Shift, 10: Address, 11: Rep, 12: Delivery Person
+          const saleAmount = parseFloat(row[6] || "0") || 0;
+          const sampleQty = parseFloat(row[4] || "0") || 0;
+          const sampleAmount = parseFloat(row[7] || "0") || 0;
+          const returnQty = parseFloat(row[5] || "0") || 0;
+          const returnAmount = parseFloat(row[8] || "0") || 0;
 
           const existing = customerMap.get(key);
 
@@ -89,10 +93,10 @@ export async function GET(req: NextRequest) {
             // Update last purchase date
             existing.lastPurchaseDate = sheetDate || existing.lastPurchaseDate;
           } else {
-            const address = (row[11] || "").toString().trim();
+            const address = (row[10] || "").toString().trim();
             customerMap.set(key, {
               shopName: customerName || "Unknown",
-              phone,
+              normalizedShopName: key,
               totalSale: saleAmount,
               visitCount: 1,
               sampleQty,
@@ -126,33 +130,153 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // Date-wise customers (if date filter provided)
-    let dateWiseCustomers: CustomerInsight[] = [];
+    // Now get date-specific data by reading the specific date sheet again
+    // This is needed because aggregated data doesn't have per-day sample/return counts
+    const dateSpecificCustomers: CustomerInsight[] = [];
+    
     if (filterDate) {
-      dateWiseCustomers = allCustomers.filter(c => c.dates.includes(filterDate));
+      // Convert filterDate (DD-MM-YYYY) to find matching sheets
+      const morningSheet = `${filterDate}-Morning`;
+      const eveningSheet = `${filterDate}-Evening`;
+      const matchingSheets = dailySheetNames.filter(
+        name => name === morningSheet || name === eveningSheet
+      );
+
+      console.log(`[CustomerInsights] Looking for sheets: ${morningSheet}, ${eveningSheet}`);
+      console.log(`[CustomerInsights] Found matching sheets:`, matchingSheets);
+      console.log(`[CustomerInsights] Available sheet dates:`, dailySheetNames.slice(0, 10));
+
+      for (const sheetName of matchingSheets) {
+        try {
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `'${sheetName}'!A2:P`,
+          });
+
+          const rows = response.data.values || [];
+          
+          // Log first 3 rows for debugging
+          console.log(`[CustomerInsights] Sheet ${sheetName} has ${rows.length} rows`);
+          if (rows.length > 0) {
+            console.log(`[CustomerInsights] First row data:`, {
+              shopName: rows[0][1],
+              sampleQty: rows[0][4],
+              returnQty: rows[0][5],
+              totalAmount: rows[0][6]
+            });
+          }
+
+          for (const row of rows) {
+            const customerName = (row[1] || "").toString().trim();
+            
+            if (!customerName) continue;
+
+            const normalizedName = normalizeShopName(customerName);
+            // Updated column indices after removing Phone column:
+            // 0: Date, 1: Shop Name, 2: Packet Price, 3: Sale Qty, 4: Sample Qty, 
+            // 5: Return Qty, 6: Total Amount, 7: Sample Amount, 8: Return Amount, 
+            // 9: Shift, 10: Address, 11: Rep, 12: Delivery Person
+            const saleAmount = parseFloat(row[6] || "0") || 0;
+            const sampleQty = parseFloat(row[4] || "0") || 0;
+            const sampleAmount = parseFloat(row[7] || "0") || 0;
+            const returnQty = parseFloat(row[5] || "0") || 0;
+            const returnAmount = parseFloat(row[8] || "0") || 0;
+            const address = (row[10] || "").toString().trim();
+
+            // Check if customer already exists in dateSpecificCustomers
+            const existingIdx = dateSpecificCustomers.findIndex(
+              c => c.normalizedShopName === normalizedName
+            );
+
+            if (existingIdx >= 0) {
+              // Merge data (Morning + Evening on same day)
+              dateSpecificCustomers[existingIdx].totalSale += saleAmount;
+              dateSpecificCustomers[existingIdx].sampleQty += sampleQty;
+              dateSpecificCustomers[existingIdx].sampleAmount += sampleAmount;
+              dateSpecificCustomers[existingIdx].returnQty += returnQty;
+              dateSpecificCustomers[existingIdx].returnAmount += returnAmount;
+              dateSpecificCustomers[existingIdx].visitCount += 1;
+            } else {
+              dateSpecificCustomers.push({
+                shopName: customerName || "Unknown",
+                normalizedShopName: normalizedName,
+                totalSale: saleAmount,
+                visitCount: 1,
+                sampleQty,
+                sampleAmount,
+                returnQty,
+                returnAmount,
+                firstPurchaseDate: filterDate,
+                lastPurchaseDate: filterDate,
+                dates: [filterDate],
+                address,
+              });
+            }
+          }
+        } catch (error) {
+          console.error(`[CustomerInsights] Error reading date-specific sheet ${sheetName}:`, error);
+        }
+      }
     }
+
+    // Date-wise customers for the selected date (from date-specific data)
+    const dateWiseCustomers = filterDate ? dateSpecificCustomers : [];
+
+    console.log(`[CustomerInsights] Date-specific customers for ${filterDate}:`, dateSpecificCustomers.length);
+    console.log(`[CustomerInsights] Sample customers (date):`, dateSpecificCustomers.filter(c => c.sampleQty > 0).length);
+    console.log(`[CustomerInsights] Return customers (date):`, dateSpecificCustomers.filter(c => c.returnQty > 0).length);
 
     // New customers for the filter date (first purchase on that date)
+    // Use date-specific data for amounts, but check allCustomers for firstPurchaseDate
     let newCustomers: CustomerInsight[] = [];
     if (filterDate) {
-      newCustomers = allCustomers.filter(c => c.firstPurchaseDate === filterDate);
+      // Get list of customers whose first purchase was on this date
+      const newCustomerNames = new Set(
+        allCustomers
+          .filter(c => c.firstPurchaseDate === filterDate)
+          .map(c => c.normalizedShopName)
+      );
+      
+      // Return their date-specific data (not all-time totals)
+      newCustomers = dateSpecificCustomers.filter(c => 
+        newCustomerNames.has(c.normalizedShopName)
+      );
     }
 
-    // Repeat customers by visit count
+    // Repeat customers by visit count (all-time, but still useful)
     const repeatCustomers2 = allCustomers.filter(c => c.visitCount === 2);
     const repeatCustomers3 = allCustomers.filter(c => c.visitCount === 3);
     const repeatCustomers4Plus = allCustomers.filter(c => c.visitCount >= 4);
 
-    // Sample customers (received samples)
-    const sampleCustomers = allCustomers.filter(c => c.sampleQty > 0);
+    // Sample customers - date-specific if date is provided, otherwise all-time
+    const sampleCustomers = filterDate 
+      ? dateSpecificCustomers.filter(c => c.sampleQty > 0 || c.sampleAmount > 0)
+      : allCustomers.filter(c => c.sampleQty > 0 || c.sampleAmount > 0);
 
-    // Return customers
-    const returnCustomers = allCustomers.filter(c => c.returnQty > 0);
+    // Return customers - date-specific if date is provided, otherwise all-time
+    // Count customers with returnQty > 0 OR returnAmount > 0
+    const returnCustomers = filterDate
+      ? dateSpecificCustomers.filter(c => c.returnQty > 0 || c.returnAmount > 0)
+      : allCustomers.filter(c => c.returnQty > 0 || c.returnAmount > 0);
 
-    // Top buyers (sorted by total sale)
-    const topBuyers = [...allCustomers]
-      .sort((a, b) => b.totalSale - a.totalSale)
-      .slice(0, 20);
+    // Total return quantity (sum of Return Qty, not count of customers)
+    const totalReturnQty = returnCustomers.reduce((sum, c) => sum + (c.returnQty || 0), 0);
+
+    // Debug logging for returns
+    if (filterDate) {
+      console.log(`[CustomerInsights] Return customers for ${filterDate}:`, 
+        returnCustomers.map(c => ({ name: c.shopName, returnQty: c.returnQty, returnAmount: c.returnAmount }))
+      );
+    }
+
+    // Top buyers - date-specific if date is provided (sorted by sale on that date)
+    const topBuyers = filterDate
+      ? [...dateSpecificCustomers]
+          .sort((a, b) => b.totalSale - a.totalSale)
+          .slice(0, 20)
+      : [...allCustomers]
+          .sort((a, b) => b.totalSale - a.totalSale)
+          .slice(0, 20);
 
     // Available dates for the date picker
     const availableDates = Array.from(allDates).sort((a, b) => {
@@ -177,6 +301,7 @@ export async function GET(req: NextRequest) {
       },
       sampleCustomers,
       returnCustomers,
+      totalReturnQty,
       topBuyers,
     });
   } catch (error: any) {

@@ -6,7 +6,6 @@ const SPREADSHEET_ID = "1OwmfDCO3AGBnHlViha2FPRySaGLPDPle106T0p3W-RA";
 
 type DeliveryShop = {
   shopName: string;
-  phone: string;
   address: string;
   saleQty: number;
   saleAmount: number;
@@ -66,11 +65,11 @@ export async function GET(req: NextRequest) {
     }
 
     // Get data from the sheet
-    // Sheet columns: Date, Shift, ShopName, Phone, PacketPrice, SaleQty, SampleQty, ReturnQty, 
-    //                SaleAmt, SampleAmt, ReturnAmt, Address, Rep, DelPerson, PaymentStatus, BalanceAmount
+    // Sheet columns: Date, ShopName, PacketPrice, SaleQty, SampleQty, ReturnQty, 
+    //                SaleAmt, SampleAmt, ReturnAmt, Shift, Address, Rep, DelPerson, PaymentStatus, BalanceAmount
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A2:P`, // Skip header row
+      range: `${sheetName}!A2:O`, // Skip header row
     });
 
     const rows = response.data.values || [];
@@ -91,22 +90,20 @@ export async function GET(req: NextRequest) {
     const deliveryMap = new Map<string, DeliveryShop[]>();
 
     for (const row of rows) {
-      // Column mapping based on appendDailyRows in googleSheets.ts:
-      // 0: date, 1: shopName, 2: phone, 3: packetPrice, 4: saleQty, 5: sampleQty,
-      // 6: returnQty, 7: saleAmount, 8: sampleAmount, 9: returnAmount, 10: shift,
-      // 11: address, 12: rep, 13: delPerson, 14: paymentStatus, 15: balanceAmount
-      const deliveryPerson = (row[13] || "Unassigned").toString().trim();
+      // Column mapping based on appendDailyRows in googleSheets.ts (updated - no phone column):
+      // 0: date, 1: shopName, 2: packetPrice, 3: saleQty, 4: sampleQty,
+      // 5: returnQty, 6: saleAmount, 7: sampleAmount, 8: returnAmount, 9: shift,
+      // 10: address, 11: rep, 12: delPerson, 13: paymentStatus, 14: balanceAmount
+      const deliveryPerson = (row[12] || "Unassigned").toString().trim();
       const shopName = (row[1] || "").toString().trim();
-      const phone = (row[2] || "").toString().trim();
-      const address = (row[11] || "").toString().trim();
-      const saleQty = parseFloat(row[4] || "0") || 0;
-      const saleAmount = parseFloat(row[7] || "0") || 0;
+      const address = (row[10] || "").toString().trim();
+      const saleQty = parseFloat(row[3] || "0") || 0;
+      const saleAmount = parseFloat(row[6] || "0") || 0;
 
       if (!shopName) continue; // Skip empty entries
 
       const shop: DeliveryShop = {
         shopName,
-        phone,
         address,
         saleQty,
         saleAmount,

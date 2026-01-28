@@ -4,7 +4,7 @@ export interface BillData {
   date: string;
   billNumber?: string;
   customerName: string;
-  phoneNumber: string;
+  normalizedShopName?: string; // Normalized shop name for unique identification
   products: string;
   quantity: string;
   price: string;
@@ -19,7 +19,7 @@ export interface BillData {
 
 export interface CustomerData {
   customerName: string;
-  phoneNumber: string;
+  normalizedShopName?: string; // Normalized shop name for unique identification
   email?: string;
   address?: string;
   totalPurchaseCount: number;
@@ -42,6 +42,29 @@ export interface DashboardMetrics {
   newCustomers: number;
   avgOrderValue: number;
   totalBalanceAmount?: number;
+  sampleExpense?: number;
+  returnExpense?: number;
+  netRevenue?: number;
+  totalExpenses?: number;
+  expenseBreakdown?: {
+    rawMaterial: number;
+    electricity: number;
+    labor: number;
+    godownRent: number;
+    petrolFuel: number;
+  };
+  expenseByDate?: Array<{
+    date: string;
+    totalExpenses: number;
+    rawMaterial: number;
+    electricity: number;
+    labor: number;
+    godownRent: number;
+    petrolFuel: number;
+  }>;
+  filterDate?: string;
+  filterStartDate?: string | null;
+  filterEndDate?: string | null;
   salesTrend: Array<{ month: string; sales: number; revenue: number }>;
   topProducts: Array<{ name: string; sales: number; revenue: number }>;
   topCustomers: Array<{
@@ -69,7 +92,7 @@ export interface DailyBillTop {
 
 export interface DailyBillItem {
   shopName: string;
-  phone: string;
+  normalizedShopName?: string; // Normalized shop name for unique identification
   packetPrice: number;
   saleQty: number;
   sampleQty: number;

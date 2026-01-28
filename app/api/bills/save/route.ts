@@ -85,7 +85,6 @@ function toDDMMYYYY(isoDate: string): string {
       },
       items: body.items.map((item: any) => ({
         shopName: item.shopName || "",
-        phone: item.phone || "",
         packetPrice: typeof item.packetPrice === "number" ? item.packetPrice : parseFloat(item.packetPrice) || 95,
         saleQty: typeof item.saleQty === "number" ? item.saleQty : parseFloat(item.saleQty) || 0,
         sampleQty: typeof item.sampleQty === "number" ? item.sampleQty : parseFloat(item.sampleQty) || 0,
@@ -151,7 +150,6 @@ function toDDMMYYYY(isoDate: string): string {
           
           const result = await saveCallFollowUp({
             name: item.shopName || "Unknown",
-            phone: item.phone || "",
             callDate: formattedDate,
             callTime: "10:00 AM", // Default time for follow-ups from bills
             notes: `Balance: ₹${item.balanceAmount || "0"} | From Daily Bills (${dailyBillsData.top.date})`,
