@@ -52,5 +52,32 @@ body{background:var(--bg);color:#111}
 .data-table th, .data-table td { padding:8px; border-bottom:1px solid #eee; text-align:left; }
 .data-table input { width:100%; padding:6px; border:1px solid #e7e7e7; border-radius:4px; }
 
-/* responsive */
-@media (max-width:1024px) { .two-panel-root{ grid-template-columns: 1fr; } .left-panel.fixed-viewport{ order:1 } .right-panel{ order:2 } }
+/* responsive - tablet and below */
+@media (max-width:1280px) { 
+  .two-panel-root { grid-template-columns: 200px 1fr; gap:10px; padding:10px; }
+  .left-panel.fixed-viewport { padding:8px; }
+}
+
+@media (max-width:1024px) { 
+  .two-panel-root{ grid-template-columns: 1fr; } 
+  .left-panel.fixed-viewport{ order:1; height:auto; max-height:50vh; position:relative; top:0; } 
+  .right-panel{ order:2; } 
+}
+
+/* responsive - small screens */
+@media (max-width:768px) { 
+  .two-panel-root { gap:8px; padding:8px; }
+  .left-panel.fixed-viewport { max-height:40vh; }
+  .right-panel { padding:8px; }
+  .tool-row button { padding:4px 6px; font-size:11px; }
+  .form-grid { max-height:30vh; }
+}
+
+/* responsive - extra small screens */
+@media (max-width:480px) { 
+  .two-panel-root { gap:6px; padding:6px; }
+  .right-panel { padding:6px; gap:6px; }
+  .left-panel.fixed-viewport { max-height:35vh; padding:6px; }
+  .tool-row { gap:4px; }
+  .tool-row button { padding:4px; font-size:10px; }
+}

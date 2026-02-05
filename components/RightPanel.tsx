@@ -464,48 +464,51 @@ export default function RightPanel() {
   return (
     <div className="flex-1 flex flex-col h-full bg-gradient-to-b from-gray-50 to-white">
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white px-6 py-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-              <span className="text-white text-lg">📄</span>
+      <div className="border-b border-gray-200 bg-white px-3 sm:px-6 py-3 sm:py-4 flex-shrink-0">
+        <div className="flex flex-col gap-3 sm:gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-base sm:text-lg">📄</span>
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
+                  Extracted Bills Data
+                </h1>
+                <p className="text-xs sm:text-sm text-gray-500 truncate">
+                  {rows.length} {rows.length === 1 ? "bill" : "bills"} extracted
+                  {isLoading && (
+                    <span className="ml-2 inline-flex items-center">
+                      <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse mr-1"></span>
+                      Processing...
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                Extracted Bills Data
-              </h1>
-              <p className="text-sm text-gray-500">
-                {rows.length} {rows.length === 1 ? "bill" : "bills"} extracted
-          {isLoading && (
-                  <span className="ml-2 inline-flex items-center">
-                    <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse mr-1"></span>
-                    Processing...
-                  </span>
-          )}
-              </p>
-            </div>
-        </div>
+          </div>
 
-          <div className="flex flex-wrap gap-2">
-          <button
-            onClick={saveBills}
-            disabled={rows.length === 0 || isLoading}
-              className="px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+          {/* Button group - fully responsive */}
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <button
+              onClick={saveBills}
+              disabled={rows.length === 0 || isLoading}
+              className="w-full sm:w-auto px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 text-sm flex-shrink-0 order-first sm:order-none"
             >
               {isLoading ? (
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
               ) : (
                 "💾"
               )}
-              Save to Sheets
-          </button>
+              <span>Save to Sheets</span>
+            </button>
             <button
               onClick={exportCSV}
               disabled={rows.length === 0}
-              className="px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+              className="w-full sm:w-auto px-3 sm:px-4 py-2 sm:py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 text-sm flex-shrink-0"
             >
-              📥 Export CSV
-          </button>
+              📥 <span>Export CSV</span>
+            </button>
           </div>
         </div>
       </div>
@@ -921,74 +924,21 @@ export default function RightPanel() {
 
         {/* Summary Footer */}
         {rows.length > 0 && (
-          <div className="border-t border-gray-200 bg-white px-6 py-4">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-              <div className="text-sm text-gray-600">
-                📊 Total:{" "}
-                <span className="font-semibold text-gray-900">
-                  {rows.length}
-                </span>{" "}
-                bills
-              </div>
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="text-sm">
-                  <span className="text-gray-600">📦 Total Sale Qty:</span>
-                  <span className="font-semibold text-blue-600 ml-2">
-                    {totalSaleQty}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-gray-600">💰 Total Sales:</span>
-                  <span className="font-semibold text-green-600 ml-2">
-                    ₹{totalSaleAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-gray-600">🎁 Sample:</span>
-                  <span className="font-semibold text-orange-600 ml-2">
-                    ₹{totalSampleAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-gray-600">↩️ Return:</span>
-                  <span className="font-semibold text-red-600 ml-2">
-                    ₹{totalReturnAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm border-l-2 border-orange-300 pl-4">
-                  <span className="text-gray-600">📉 Total Expenses:</span>
-                  <span className="font-semibold text-orange-700 ml-2">
-                    ₹{totalExpenses.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm border-l-2 border-purple-300 pl-4">
-                  <span className="text-gray-600">📊 Net Revenue:</span>
-                  <span className={`font-semibold ml-2 ${netRevenue >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
-                    ₹{netRevenue.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-gray-600">💳 Balance:</span>
-                  <span className="font-semibold text-amber-600 ml-2">
-                    ₹{totalBalanceAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm border-l-2 border-blue-300 pl-4">
-                  <span className="text-gray-600">💵 Cash:</span>
-                  <span className="font-semibold text-blue-700 ml-2">
-                    ₹{totalCashAmount.toFixed(2)}
-                  </span>
-                </div>
-                <div className="text-sm border-l-2 border-green-300 pl-4">
-                  <span className="text-gray-600">✨ Profit:</span>
-                  <span className={`font-semibold ml-2 ${totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    ₹{totalProfit.toFixed(2)}
-                  </span>
+          <div className="border-t border-gray-200 bg-white px-3 sm:px-6 py-4 flex-shrink-0">
+            <div className="flex flex-col gap-4">
+              {/* Top row: Total bills + Save button */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className="text-sm text-gray-600 whitespace-nowrap">
+                  📊 Total:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {rows.length}
+                  </span>{" "}
+                  bills
                 </div>
                 <button
                   onClick={saveBills}
                   disabled={rows.length === 0 || isLoading}
-                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 text-sm"
+                  className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg font-medium hover:shadow-lg hover:shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 text-sm flex-shrink-0 order-first sm:order-last"
                 >
                   {isLoading ? (
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
@@ -997,6 +947,69 @@ export default function RightPanel() {
                   )}
                   Save All Bills
                 </button>
+              </div>
+
+              {/* Metrics grid - responsive */}
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 text-xs sm:text-sm">
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">📦 Sale Qty</span>
+                  <span className="font-semibold text-blue-600 block">
+                    {totalSaleQty}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">💰 Total Sales</span>
+                  <span className="font-semibold text-green-600 block">
+                    ₹{totalSaleAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">🎁 Sample</span>
+                  <span className="font-semibold text-orange-600 block">
+                    ₹{totalSampleAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">↩️ Return</span>
+                  <span className="font-semibold text-red-600 block">
+                    ₹{totalReturnAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">📉 Expenses</span>
+                  <span className="font-semibold text-orange-700 block">
+                    ₹{totalExpenses.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Secondary metrics grid - responsive */}
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 text-xs sm:text-sm">
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">📊 Net Revenue</span>
+                  <span className={`font-semibold block ${netRevenue >= 0 ? 'text-purple-600' : 'text-red-600'}`}>
+                    ₹{netRevenue.toFixed(2)}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">💳 Balance</span>
+                  <span className="font-semibold text-amber-600 block">
+                    ₹{totalBalanceAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">💵 Cash</span>
+                  <span className="font-semibold text-blue-700 block">
+                    ₹{totalCashAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-gray-600 block">✨ Profit</span>
+                  <span className={`font-semibold block ${totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    ₹{totalProfit.toFixed(2)}
+                  </span>
+                </div>
+                <div className="hidden lg:block"></div>
               </div>
             </div>
           </div>
